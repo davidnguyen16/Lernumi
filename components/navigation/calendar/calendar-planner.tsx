@@ -52,7 +52,7 @@ import {
  * chứa hôm nay, không có thì kỳ gần nhất.
  */
 
-const HOUR_START = 6;
+const HOUR_START = 0;
 const HOUR_END = 24;
 const HOUR_HEIGHT = 44;
 /** Cột nhãn giờ bên trái (3.5rem). */
@@ -235,10 +235,11 @@ function WeekView({
     const pressedRectRef = useRef<DOMRect | null>(null);
     const [saving, setSaving] = useState(false);
 
-    // Mở ra ở 8 giờ sáng thay vì 6 giờ, như Google Calendar cuộn sẵn tới giờ làm việc.
+    // Lưới đủ 24 giờ nhưng mở ra ở 8 giờ sáng, như Google Calendar cuộn sẵn tới giờ làm việc.
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: (8 - HOUR_START) * HOUR_HEIGHT - 10 });
     }, []);
+
 
     const offeringCode = (offeringId: string | null) =>
         offerings.find((offering) => offering.id === offeringId)?.subject.code ?? null;
@@ -381,8 +382,12 @@ function WeekView({
                 )}
             </div>
 
-            {/* Tiêu đề ngày + hàng all-day */}
-            <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b">
+            {/*
+                Tiêu đề ngày + hàng all-day. Lưới giờ bên dưới có thanh cuộn dọc nên hẹp hơn đúng bằng
+                bề rộng thanh cuộn; `scrollbar-gutter: stable` chừa cùng một khoảng ở cả hai khung
+                (kể cả khi overflow là hidden) để cột ngày trên dưới thẳng hàng.
+            */}
+            <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] overflow-y-hidden border-b [scrollbar-gutter:stable]">
                 <div className="border-r" />
                 {days.map((day) => {
                     const isToday = day === today;
@@ -415,7 +420,7 @@ function WeekView({
             </div>
 
             {/* Lưới giờ — kéo trên ô trống để thêm việc, kéo khối để dời, bấm khối để sửa. */}
-            <div ref={scrollRef} className="max-h-80 overflow-y-auto">
+            <div ref={scrollRef} className="max-h-80 overflow-y-auto [scrollbar-gutter:stable]">
                 <div
                     ref={gridRef}
                     className="relative grid touch-none grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]"
