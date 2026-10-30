@@ -1,0 +1,70 @@
+import { z } from 'zod';
+export type AssessmentSchemaValue = z.output<typeof AssessmentSchema>;
+const optionalText = z
+    .string()
+    .max(4000, { message: 'Description must not exceed 4000 characters' })
+    .nullable()
+    .transform((value) => {
+    const trimmed = value?.trim() ?? '';
+    return trimmed === '' ? null : trimmed;
+});
+const optionalExpectedDue = z
+    .string()
+    .trim()
+    .max(500, { message: 'Expected due must not exceed 500 characters' })
+    .nullable()
+    .transform((value) => {
+    const trimmed = value?.trim() ?? '';
+    return trimmed === '' ? null : trimmed;
+});
+const optionalLocalDateTime = z
+    .string()
+    .trim()
+    .transform((value) => (value === '' ? null : new Date(value)))
+    .refine((value) => value === null || !Number.isNaN(value.getTime()), {
+    message: 'Date and time are invalid',
+})
+    .nullable();
+export const AssessmentSchema = z
+    .strictObject({
+    name: z.string().trim().min(1, { message: 'Name is required' }).max(200),
+    description: optionalText,
+    weight: z.coerce
+        .number({ message: 'Weight is required' })
+        .positive({ message: 'Weight must be greater than 0' })
+        .max(100, { message: 'Weight must not exceed 100' }),
+    hurdle: z.boolean(),
+    isGroup: z.boolean(),
+    publishAt: optionalLocalDateTime,
+    dueAt: optionalLocalDateTime,
+    expectedDue: optionalExpectedDue,
+    toolIds: z.array(z.uuid({ message: 'Invalid tool selection' })).max(100),
+})
+    .superRefine((value, context) => {
+    if (value.publishAt && value.dueAt && value.publishAt >= value.dueAt) {
+        context.addIssue({
+            code: 'custom',
+            message: 'Publish date must be before the due date',
+            path: ['publishAt'],
+        });
+    }
+    if (new Set(value.toolIds).size !== value.toolIds.length) {
+        context.addIssue({
+            code: 'custom',
+            message: 'A tool can only be selected once',
+            path: ['toolIds'],
+        });
+    }
+});
+export type AssessmentFormValue = z.input<typeof AssessmentSchema>;
+export const EMPTY_ASSESSMENT_FORM: AssessmentFormValue = {
+    name: '',
+    description: '',
+    weight: '',
+    hurdle: false,
+    isGroup: false,
+    publishAt: '',
+    dueAt: '',
+    expectedDue: '',
+    toolIds: [],
+};

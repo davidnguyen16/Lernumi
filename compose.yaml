@@ -1,50 +1,46 @@
-name: ailearn
+name: lernumi
 
 services:
-  db:
+  postgres:
     image: postgres:17
-    container_name: ailearn-pg
     environment:
-      POSTGRES_PASSWORD: dev
-      POSTGRES_DB: ailearn
+      POSTGRES_DB: lernumi
+      POSTGRES_USER: lernumi
+      POSTGRES_PASSWORD: lernumi_dev
     ports:
-      - "5432:5432" # may that -> trong container
+      - "127.0.0.1:${LERNUMI_DB_PORT:-5433}:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/docker/postgres/init-testing.sql:/docker-entrypoint-initdb.d/10-testing.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ailearn"]
-      interval: 2s
+      test: ["CMD-SHELL", "pg_isready -U lernumi -d lernumi"]
+      interval: 3s
       timeout: 3s
-      retries: 30
-      start_period: 10s
+      retries: 20
 
-  # Kho tệp nói giao thức S3. Ở máy dev là container này; khi lên AWS thì đổi sang S3 thật,
-  # mã nguồn không phải sửa gì ngoài việc bỏ `endpoint` và `forcePathStyle` đi.
-  #
-  # ─── Vì sao GHIM tag ────────────────────────────────────────────────────────
-  #
-  # MinIO đã ngừng phát triển từ 02/2026; RELEASE.2025-09-07 là bản cuối. Ghim đúng nó để hai
-  # máy luôn chạy cùng một thứ, và để `latest` không âm thầm đổi dưới chân.
-  storage:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    container_name: ailearn-minio
-    command: server /data --console-address ":9001"
+  api:
+    build:
+      context: ./server
+    working_dir: /var/www/html
     environment:
-      MINIO_ROOT_USER: ailearn
-      MINIO_ROOT_PASSWORD: ailearn-dev-secret
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: lernumi
+      DB_USERNAME: lernumi
+      DB_PASSWORD: lernumi_dev
     ports:
-      - "9000:9000" # API S3 — thu ma ung dung goi
-      - "9001:9001" # trinh duyet tep, mo bang trinh duyet web
+      - "127.0.0.1:${LERNUMI_API_PORT:-8000}:8000"
     volumes:
-      - miniodata:/data
-    healthcheck:
-      # MinIO mo san mot duong dan bao suc khoe. Dung no de `--wait` biet luc nao san sang.
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
-      interval: 2s
-      timeout: 3s
-      retries: 30
-      start_period: 10s
+      - ./server:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Keep Compose's database environment in Laravel's PHP server subprocess.
+    command: ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000", "--no-reload"]
 
 volumes:
-  pgdata:
-  miniodata:
+  postgres_data:

@@ -1,0 +1,56 @@
+@baseUrl = http://localhost:8000/api/v1
+@institutionId = 11111111-1111-4111-8111-111111111111
+# Replace with the ID returned by POST before running requests for one subject.
+@subjectId = REPLACE_WITH_SUBJECT_UUID
+
+### List subjects in the demo institution
+GET {{baseUrl}}/institutions/{{institutionId}}/subjects?search=comp&per_page=10&page=1
+Accept: application/json
+
+### Create; code is normalized to COMP2000
+POST {{baseUrl}}/institutions/{{institutionId}}/subjects
+Accept: application/json
+Content-Type: application/json
+
+{
+  "subjectCode": " comp2000 ",
+  "subjectName": "Data Structures",
+  "subjectDescription": "Lists, trees and graphs."
+}
+
+### Read; set subjectId above first
+GET {{baseUrl}}/institutions/{{institutionId}}/subjects/{{subjectId}}
+Accept: application/json
+
+### Partial update; code and description stay unchanged
+PATCH {{baseUrl}}/institutions/{{institutionId}}/subjects/{{subjectId}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "subjectName": "Data Structures and Algorithms"
+}
+
+### Replace; omitted description becomes null
+PUT {{baseUrl}}/institutions/{{institutionId}}/subjects/{{subjectId}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "subjectCode": "COMP2000",
+  "subjectName": "Data Structures"
+}
+
+### Delete
+DELETE {{baseUrl}}/institutions/{{institutionId}}/subjects/{{subjectId}}
+Accept: application/json
+
+### Validation example; expect 422
+POST {{baseUrl}}/institutions/{{institutionId}}/subjects
+Accept: application/json
+Content-Type: application/json
+
+{
+  "subjectCode": "invalid code!",
+  "subjectName": ""
+}

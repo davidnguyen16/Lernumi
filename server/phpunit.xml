@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/12.0/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache">
+    <testsuites>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <!-- Server variables take precedence over the API container's environment. -->
+        <server name="APP_ENV" value="testing"/>
+        <server name="APP_KEY" value="base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="/>
+        <server name="APP_DEBUG" value="false"/>
+        <server name="DB_CONNECTION" value="pgsql"/>
+        <server name="DB_HOST" value="postgres"/>
+        <server name="DB_PORT" value="5432"/>
+        <server name="DB_DATABASE" value="lernumi_testing"/>
+        <server name="DB_USERNAME" value="lernumi"/>
+        <server name="DB_PASSWORD" value="lernumi_dev"/>
+        <server name="CACHE_STORE" value="array"/>
+        <server name="SESSION_DRIVER" value="array"/>
+        <server name="QUEUE_CONNECTION" value="sync"/>
+        <server name="MAIL_MAILER" value="array"/>
+    </php>
+</phpunit>
