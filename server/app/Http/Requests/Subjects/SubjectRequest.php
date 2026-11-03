@@ -4,6 +4,7 @@ namespace App\Http\Requests\Subjects;
 
 use App\Models\Institution;
 use App\Models\Subject;
+use App\Services\AccessService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -11,8 +12,7 @@ abstract class SubjectRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Authentication and institution RBAC are separate migration work.
-        return true;
+        return app(AccessService::class)->can($this->user(), $this->isMethod('POST') ? 'subject.create' : 'subject.update', $this->route('institution'));
     }
 
     protected function prepareForValidation(): void

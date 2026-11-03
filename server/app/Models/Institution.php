@@ -17,4 +17,8 @@ class Institution extends Model
     {
         return $this->hasMany(Subject::class);
     }
+
+    public function terms(): HasMany { return $this->hasMany(StudyTerm::class); }
+    public function studyTerms(): HasMany { return $this->terms(); }
+    public function offerings(): HasMany { return $this->hasMany(Offering::class); }
 }

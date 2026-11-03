@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Institution;
 use App\Models\Subject;
+use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,12 @@ use Tests\TestCase;
 class SubjectApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::query()->forceCreate(['name' => 'Subject administrator', 'email' => 'subjects@example.test', 'password' => 'test-password', 'is_admin' => true])->refresh());
+    }
 
     public function test_creating_a_subject_normalizes_input_and_returns_its_location(): void
     {

@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'paths' => ['api/*', 'up'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'up'],
 
     'allowed_methods' => ['*'],
 
@@ -14,9 +14,9 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    'exposed_headers' => ['ETag', 'Location', 'Content-Disposition'],
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 ];

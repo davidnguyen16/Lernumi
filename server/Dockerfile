@@ -6,6 +6,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+COPY docker/php.ini /usr/local/etc/php/conf.d/lernumi.ini
 
 WORKDIR /var/www/html
 

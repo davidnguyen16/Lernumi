@@ -3,6 +3,7 @@ name: lernumi
 services:
   postgres:
     image: postgres:17
+    restart: unless-stopped
     environment:
       POSTGRES_DB: lernumi
       POSTGRES_USER: lernumi
@@ -22,6 +23,7 @@ services:
     build:
       context: ./server
     working_dir: /var/www/html
+    restart: unless-stopped
     environment:
       APP_ENV: local
       APP_DEBUG: "true"
@@ -39,6 +41,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://localhost:8000/api/v1/health') === false ? 1 : 0);"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     # Keep Compose's database environment in Laravel's PHP server subprocess.
     command: ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000", "--no-reload"]
 

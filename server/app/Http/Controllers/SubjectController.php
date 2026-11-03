@@ -8,18 +8,26 @@ use App\Http\Requests\Subjects\UpdateSubjectRequest;
 use App\Http\Resources\SubjectResource;
 use App\Models\Institution;
 use App\Models\Subject;
+use App\Services\AccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Validation\ValidationException;
 
 class SubjectController
 {
+    public function __construct(private readonly AccessService $access) {}
+
     public function index(IndexSubjectRequest $request, Institution $institution): AnonymousResourceCollection
     {
+        $this->access->authorize($request->user(), 'subject.view', $institution);
         $search = $request->validated('search');
+        $sort = $request->validated('sort', 'subjectCode');
+        $sortColumn = ['subjectCode' => 'subject_code', 'name' => 'subject_name', 'createdAt' => 'created_at'][ltrim($sort, '-')];
 
         $subjects = $institution->subjects()
             ->when($search !== null && $search !== '', function (Builder $query) use ($search): void {
@@ -29,7 +37,7 @@ class SubjectController
                         ->orWhereRaw('strpos(lower(subject_name), lower(?)) > 0', [$search]);
                 });
             })
-            ->orderBy('subject_code')
+            ->orderBy($sortColumn, str_starts_with($sort, '-') ? 'desc' : 'asc')
             ->orderBy('id')
             ->paginate((int) $request->validated('per_page', 15))
             ->withQueryString();
@@ -50,8 +58,9 @@ class SubjectController
             ->header('Location', route('subjects.show', [$institution, $subject]));
     }
 
-    public function show(Institution $institution, Subject $subject): SubjectResource
+    public function show(Request $request, Institution $institution, Subject $subject): SubjectResource
     {
+        $this->access->authorize($request->user(), 'subject.view', $institution);
         return new SubjectResource($subject);
     }
 
@@ -66,9 +75,12 @@ class SubjectController
         return new SubjectResource($subject);
     }
 
-    public function destroy(Institution $institution, Subject $subject): Response
+    public function destroy(Request $request, Institution $institution, Subject $subject): Response
     {
-        $subject->delete();
+        $this->access->authorize($request->user(), 'subject.delete', $institution);
+        abort_if($subject->offerings()->exists(), 409, 'This subject still has offerings.');
+        try { $subject->delete(); }
+        catch (QueryException $exception) { if ($exception->getCode() !== '23503') throw $exception; abort(409, 'This subject still has linked records.'); }
 
         return response()->noContent();
     }

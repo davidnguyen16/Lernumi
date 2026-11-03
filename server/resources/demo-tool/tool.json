@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "code": "demo-api-probe",
+  "version": "1.0.0",
+  "entry": "index.html"
+}

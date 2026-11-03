@@ -1,0 +1,415 @@
+# Local request examples. Use a client that keeps response cookies between requests.
+# Set real credentials locally; demo account instructions are in server/README.md.
+# Replace every UUID/hash/token placeholder before running the related request.
+# Login: run CSRF bootstrap, copy URL-decoded XSRF-TOKEN cookie into xsrfToken, then login.
+# Mutations may rotate the cookie: keep xsrfToken synchronized with the latest cookie.
+# Business requests use browser/session cookies; runtime requests use the separate tool JWT.
+
+@baseUrl = http://localhost:8000
+@runtimeOrigin = http://127.0.0.1:8000
+@frontendOrigin = http://localhost:3000
+@email = you@example.test
+@password = SET_YOUR_LOCAL_PASSWORD
+@xsrfToken = COPY_URL_DECODED_XSRF_COOKIE
+@institutionId = REPLACE_WITH_INSTITUTION_UUID
+@subjectId = REPLACE_WITH_SUBJECT_UUID
+@termId = REPLACE_WITH_TERM_UUID
+@offeringId = REPLACE_WITH_OFFERING_UUID
+@assessmentId = REPLACE_WITH_ASSESSMENT_UUID
+@roleId = REPLACE_WITH_ROLE_UUID
+@roleAssignmentId = REPLACE_WITH_OWN_ROLE_ASSIGNMENT_UUID
+@userId = REPLACE_WITH_TARGET_USER_UUID
+@applicationId = REPLACE_WITH_REQUEST_UUID
+@groupId = REPLACE_WITH_GROUP_UUID
+@attemptId = REPLACE_WITH_ATTEMPT_UUID
+@markId = REPLACE_WITH_MARK_UUID
+@workspaceId = REPLACE_WITH_WORKSPACE_UUID
+@documentId = REPLACE_WITH_DOCUMENT_UUID
+@contentHash = REPLACE_WITH_LATEST_CONTENT_HASH
+@toolId = REPLACE_WITH_TOOL_UUID
+@versionId = REPLACE_WITH_TOOL_VERSION_UUID
+@workSessionId = REPLACE_WITH_RECORDED_WORK_SESSION_UUID
+@runtimeToken = REPLACE_WITH_TOOL_JWT
+@scopeCode = REPLACE_WITH_ONE_TIME_CODE
+
+### Database/schema readiness (public)
+GET {{baseUrl}}/api/v1/health
+Accept: application/json
+
+### 1. Bootstrap session/XSRF cookies
+GET {{baseUrl}}/sanctum/csrf-cookie
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### 2. Login; client must send the cookies from the preceding response
+POST {{baseUrl}}/api/v1/auth/login
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"email":"{{email}}","password":"{{password}}"}
+
+### 3. Get own identity/contexts and copy IDs from response
+GET {{baseUrl}}/api/v1/auth/session
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### Directory is available to a signed-in user without a role assignment
+GET {{baseUrl}}/api/v1/institution-directory?search=Example&perPage=15
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### Role eligibility for onboarding
+GET {{baseUrl}}/api/v1/institutions/{{institutionId}}/requestable-roles
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### System admin: create institution
+POST {{baseUrl}}/api/v1/admin/institutions
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"name":"Example University","website":"https://example.edu"}
+
+### Institution subject manager: create subject
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/subjects
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"subjectCode":"COMP1000","subjectName":"Programming","subjectDescription":"Introduction to programming"}
+
+### Create term and its teaching period
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/terms
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"year":2027,"session":1,"periods":[{"name":"Teaching","type":"TEACHING","startAt":"2027-02-15T00:00:00Z","endAt":"2027-05-17T00:00:00Z"}]}
+
+### Open the subject in the term; both IDs must belong to this institution
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/offerings
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"subjectId":"{{subjectId}}","termId":"{{termId}}"}
+
+### Published individual assessment; create/activate the tool separately first
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/offerings/{{offeringId}}/assessments
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"name":"Assignment 1","weight":25,"isGroup":false,"publishAt":"2026-01-01T00:00:00Z","dueAt":"2027-03-15T12:00:00Z","allowedToolIds":["{{toolId}}"]}
+
+### Permission catalog for role editor
+GET {{baseUrl}}/api/v1/permissions
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### Create offering-scoped student role (requires institution role.create/delegation authority)
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/roles
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"roleCode":"offering:student","roleName":"Student","scopeType":"OFFERING","requestMode":"PUBLIC","permissions":["offering.view","assessment.view_published","assessment.attempt","attempt.view_own","tool.launch","tool_session.replay_own"]}
+
+### Grant role and offering scope to a user (run with appropriate grant/delegation authority)
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/role-assignments
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"userId":"{{userId}}","roleId":"{{roleId}}","offeringIds":["{{offeringId}}"]}
+
+### Scoped manager list omits every other offering's scopes
+GET {{baseUrl}}/api/v1/institutions/{{institutionId}}/role-assignments?offeringId={{offeringId}}&perPage=20
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### Student: request role identity
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/role-requests
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"roleId":"{{roleId}}","note":"Please grant access."}
+
+### Reviewer: process that request once
+PATCH {{baseUrl}}/api/v1/institutions/{{institutionId}}/role-requests/{{applicationId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"decision":"APPROVED","note":"Enrollment checked."}
+
+### Student: request offering scope for own active OFFERING role
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/scope-requests
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"roleAssignmentId":"{{roleAssignmentId}}","offeringId":"{{offeringId}}"}
+
+### Alternatively redeem a code supplied by an authorized issuer
+POST {{baseUrl}}/api/v1/scope-codes/redeem
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"code":"{{scopeCode}}","roleAssignmentId":"{{roleAssignmentId}}"}
+
+### Student offerings in one selected context; omit query to use the union of applicable roles
+GET {{baseUrl}}/api/v1/me/offerings?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### Published assessment and tools
+GET {{baseUrl}}/api/v1/me/assessments/{{assessmentId}}?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### For group assessments only: create group (student creator is included automatically)
+POST {{baseUrl}}/api/v1/me/assessments/{{assessmentId}}/groups?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"name":"Team A","memberIds":["{{userId}}"]}
+
+### Start individual attempt; for group assessment add groupId
+POST {{baseUrl}}/api/v1/me/attempts?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"assessmentId":"{{assessmentId}}"}
+
+### Workspace includes folder entries/tools; copy workspaceId from attempt response
+GET {{baseUrl}}/api/v1/workspaces/{{workspaceId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### Create source file; response contains documentId/contentHash
+POST {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/documents
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"name":"main.py","entryKind":"FILE","parentFolderId":null,"content":"print('hello')\n"}
+
+### Read bytes and current ETag (this is not a JSON metadata endpoint)
+GET {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/documents/{{documentId}}/content
+Origin: {{frontendOrigin}}
+Accept: application/octet-stream
+
+### Save RAW bytes with the current content hash; missing header=428, stale hash=412
+PUT {{baseUrl}}/api/v1/workspaces/{{workspaceId}}/documents/{{documentId}}/content
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: text/plain; charset=utf-8
+X-XSRF-TOKEN: {{xsrfToken}}
+If-Match: "{{contentHash}}"
+
+print('updated')
+
+### Launch assessment work tool from PLATFORM origin, then open response.runtimeUrl in a new tab
+POST {{baseUrl}}/api/tool/v1/sessions
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"mode":"WORK","attemptId":"{{attemptId}}","toolId":"{{toolId}}","roleAssignmentId":"{{roleAssignmentId}}"}
+
+### Inside tool: use TOOL JWT (not account PAT/session token)
+GET {{runtimeOrigin}}/api/tool/v1/context
+Accept: application/json
+Authorization: Bearer {{runtimeToken}}
+
+### Recording checkpoint, before scheduling the next batch
+GET {{runtimeOrigin}}/api/tool/v1/events/checkpoint
+Accept: application/json
+Authorization: Bearer {{runtimeToken}}
+
+### Event batch; replace batchId with fresh UUID once, preserve it and exact payload for retries
+POST {{runtimeOrigin}}/api/tool/v1/events
+Accept: application/json
+Authorization: Bearer {{runtimeToken}}
+Content-Type: application/json
+
+{"batchId":"REPLACE_WITH_CLIENT_BATCH_UUID","seqStart":0,"seqEnd":0,"clientAt":"2027-03-01T01:00:00.000Z","events":[{"type":"file.open","documentId":"{{documentId}}"}]}
+
+### Refresh BEFORE 300-second tool token expires
+POST {{runtimeOrigin}}/api/tool/v1/token
+Accept: application/json
+Authorization: Bearer {{runtimeToken}}
+
+### Close recording owner session
+PATCH {{runtimeOrigin}}/api/tool/v1/session
+Accept: application/json
+Authorization: Bearer {{runtimeToken}}
+Content-Type: application/json
+
+{}
+
+### Submit student attempt; file/event writes will now be forbidden
+POST {{baseUrl}}/api/v1/me/attempts/{{attemptId}}/submit?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{}
+
+### Teacher: get marking detail and recorded session IDs
+GET {{baseUrl}}/api/v1/institutions/{{institutionId}}/attempts/{{attemptId}}?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### Teacher: create/continue own draft (submitted attempt required)
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/attempts/{{attemptId}}/marks?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{}
+
+### Teacher: edit draft
+PATCH {{baseUrl}}/api/v1/institutions/{{institutionId}}/attempts/{{attemptId}}/marks/{{markId}}?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"score":82.5,"outOf":100,"feedback":"Good explanation."}
+
+### Teacher: submit draft revision
+POST {{baseUrl}}/api/v1/institutions/{{institutionId}}/attempts/{{attemptId}}/marks/{{markId}}/submit?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{}
+
+### Explicit official result selection (attempt.result.finalize permission)
+PUT {{baseUrl}}/api/v1/institutions/{{institutionId}}/attempts/{{attemptId}}/result?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"markId":"{{markId}}","note":"Final result."}
+
+### Replay launch uses tool's CURRENT active version; recorded session still pins its original version
+POST {{baseUrl}}/api/tool/v1/sessions
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"mode":"REPLAY","workSessionId":"{{workSessionId}}","roleAssignmentId":"{{roleAssignmentId}}"}
+
+### Read recorded batches using the NEW replay JWT from the previous response
+GET {{runtimeOrigin}}/api/tool/v1/replay/sessions/{{workSessionId}}/events?afterSeq=-1&limit=100
+Accept: application/json
+Authorization: Bearer {{runtimeToken}}
+
+### Private date-only plan (no UTC conversion)
+PUT {{baseUrl}}/api/v1/me/assessment-plans/{{assessmentId}}?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"startDate":"2027-03-01","endDate":"2027-03-07"}
+
+### Aggregate calendar
+GET {{baseUrl}}/api/v1/me/calendar?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### Private timed event requires explicit timezone
+POST {{baseUrl}}/api/v1/me/calendar-events?roleAssignmentId={{roleAssignmentId}}
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"title":"Study session","startAt":"2027-03-01T08:00:00+11:00","endAt":"2027-03-01T10:00:00+11:00","offeringId":"{{offeringId}}"}
+
+### Authenticated active tool catalog (ordinary users cannot inspect inactive versions)
+GET {{baseUrl}}/api/v1/tools
+Origin: {{frontendOrigin}}
+Accept: application/json
+
+### System admin: create tool metadata; ZIP upload is a separate multipart request in API reference
+POST {{baseUrl}}/api/v1/admin/tools
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{"code":"example-editor","name":"Example Editor","description":"Practice tool"}
+
+### Activate an uploaded immutable version (system admin)
+POST {{baseUrl}}/api/v1/admin/tools/{{toolId}}/versions/{{versionId}}/activate
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{}
+
+### Upload tool version ZIP (system admin)
+# Create server/tool.zip with tool.json at ZIP root, then run this request.
+# The HTTP client reads the local binary file; the server never reads a client-side path string.
+POST {{baseUrl}}/api/v1/admin/tools/{{toolId}}/versions
+Origin: {{frontendOrigin}}
+Accept: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+Content-Type: multipart/form-data; boundary=LernumiExampleBoundary
+
+--LernumiExampleBoundary
+Content-Disposition: form-data; name="package"; filename="tool.zip"
+Content-Type: application/zip
+
+< ./tool.zip
+--LernumiExampleBoundary
+Content-Disposition: form-data; name="releaseNotes"
+
+Initial package version
+--LernumiExampleBoundary
+Content-Disposition: form-data; name="activate"
+
+1
+--LernumiExampleBoundary--
+
+### Logout current browser session; GET auth/session should then return 401
+POST {{baseUrl}}/api/v1/auth/logout
+Origin: {{frontendOrigin}}
+Accept: application/json
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrfToken}}
+
+{}
