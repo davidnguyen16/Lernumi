@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: lernumi_testing
+      POSTGRES_USER: lernumi
+      POSTGRES_PASSWORD: lernumi_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lernumi -d lernumi_testing"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build: ./server
+    user: "1000:1000"
+    working_dir: /var/www/html
+    environment:
+      APP_ENV: testing
+      APP_KEY: "base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8000
+      FRONTEND_URL: http://localhost:3001
+      CORS_ALLOWED_ORIGINS: http://localhost:3001
+      SANCTUM_STATEFUL_DOMAINS: localhost:3001,localhost:8000
+      TOOL_RUNTIME_ORIGIN: http://127.0.0.1:8000
+
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: lernumi_testing
+      DB_USERNAME: lernumi
+      DB_PASSWORD: lernumi_dev
+
+      COMPOSER_HOME: /tmp/composer
+      SESSION_DRIVER: database
+      SESSION_SECURE_COOKIE: "false"
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      BCRYPT_ROUNDS: "4"
+    volumes:
+      - ./server:/var/www/html
+      - ./reports:/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - php
+      - artisan
+      - serve
+      - --host=0.0.0.0
+      - --port=8000
+      - --no-reload
+    healthcheck:
+      test:
+        - CMD
+        - php
+        - -r
+        - "exit(@file_get_contents('http://localhost:8000/api/v1/health') === false ? 1 : 0);"
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  e2e:
+    build:
+      context: ./client
+      dockerfile: client.Dockerfile
+    init: true
+    shm_size: 1gb
+    user: "1000:1000"
+    group_add: ["2375"]
+    network_mode: service:api
+    working_dir: ${WORKSPACE}/client
+    environment:
+      CI: "true"
+      LERNUMI_API_URL: http://localhost:8000
+      FRONTEND_URL: http://localhost:3001
+      E2E_BASE_URL: http://localhost:3001
+      PLAYWRIGHT_JUNIT_OUTPUT_FILE: ${WORKSPACE}/reports/playwright.xml
+
+      COMPOSE_FILE: ${WORKSPACE}/compose.ci.yaml
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+      WORKSPACE: ${WORKSPACE}
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - ${WORKSPACE}:${WORKSPACE}
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
