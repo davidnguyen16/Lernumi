@@ -1,0 +1,84 @@
+name: lernumi-jenkins
+
+services:
+  # Set ownership only on the roots of the two Jenkins volumes.
+  init-volumes:
+    image: docker:29-cli
+    user: root
+    network_mode: none
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        chown 1000:1000 /workspace /agent-secret
+        chmod 0755 /workspace
+        chmod 0700 /agent-secret
+    volumes:
+      - agent_workspace:/workspace
+      - agent_secret:/agent-secret
+
+  jenkins:
+    image: jenkins/jenkins:lts-jdk21
+    restart: unless-stopped
+    depends_on:
+      init-volumes:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./docker/jenkins/controller:/var/jenkins_home/init.groovy.d:ro
+      - agent_secret:/run/jenkins-agent
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/login > /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # Jobs use this engine; their containers/volumes are separate from local development.
+  docker:
+    image: docker:29-dind
+    privileged: true
+    restart: unless-stopped
+    depends_on:
+      init-volumes:
+        condition: service_completed_successfully
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+    volumes:
+      - docker_data:/var/lib/docker
+      - docker_certs:/certs/client
+      # Nested Compose bind mounts must resolve to the same absolute workspace path.
+      - agent_workspace:/home/jenkins/agent
+    healthcheck:
+      test: ["CMD-SHELL", "docker info > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  agent:
+    build:
+      context: ./docker/jenkins/agent
+    init: true
+    restart: unless-stopped
+    depends_on:
+      jenkins:
+        condition: service_healthy
+      docker:
+        condition: service_healthy
+    environment:
+      DOCKER_HOST: tcp://docker:2376
+      DOCKER_TLS_VERIFY: "1"
+      DOCKER_CERT_PATH: /certs/client
+    volumes:
+      - agent_workspace:/home/jenkins/agent
+      - agent_secret:/run/jenkins-agent:ro
+      - docker_certs:/certs/client:ro
+
+volumes:
+  jenkins_home:
+  agent_workspace:
+  agent_secret:
+  docker_data:
+  docker_certs:

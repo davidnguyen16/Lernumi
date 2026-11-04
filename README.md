@@ -24,4 +24,6 @@ Run the setup script before using plain `docker compose up` on a fresh clone. Co
 
 You will write the Jenkins CI/CD pipeline and deploy to EC2 yourself using [this guide](docs/ec2-jenkins-guide.md).
 
+For a local Jenkins controller and build agent that both run in Docker, follow the [Jenkins Docker setup](docker/jenkins/README.md). This environment includes the build tools; you write the `Jenkinsfile` yourself.
+
 The selected cloud instance is **t4g.nano ARM64**. See the [dedicated guide](docs/ec2-t4g-nano.md) for memory limits, costs, and deployment steps.

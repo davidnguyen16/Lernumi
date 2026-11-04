@@ -1,5 +1,7 @@
 # Tự triển khai Lernumi lên EC2 với Jenkins
 
+Môi trường Jenkins local có thể chạy hoàn toàn bằng Docker, gồm controller, agent Linux và Docker engine riêng cho job. Xem [cách chạy Jenkins trong Docker](../docker/jenkins/README.md). Stack này chuẩn bị công cụ và kết nối agent `docker-local`; bạn vẫn tự viết `Jenkinsfile` và cấu hình các stage bên dưới.
+
 Bạn tự viết pipeline, cấu hình cloud và chạy deployment. Repo hiện có Docker cho phát triển local; chưa có `Jenkinsfile`, image production hay stack production do tài liệu này tạo ra. Với lựa chọn **EC2 t4g.nano**, bắt đầu bằng [hướng dẫn nano ARM64 và dự toán chi phí](ec2-t4g-nano.md): máy chỉ có 0.5 GiB RAM, dùng cho demo ít tải và cần đo thực tế.
 
 Frontend và backend đã được kết nối ở local; chưa có phần nào được triển khai cloud. Jenkins và quá trình build image chạy ở máy khác. Nano chỉ nhận image `linux/arm64` đã build, chạy reverse proxy, Laravel và PostgreSQL 17 cho demo ít tải. Frontend Next có SSR cần host khác hoặc máy nhiều RAM hơn; không đưa cả stack vào ngân sách 0.5 GiB RAM của nano.
