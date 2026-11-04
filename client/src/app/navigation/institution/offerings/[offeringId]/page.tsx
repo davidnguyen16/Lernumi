@@ -1,5 +1,10 @@
-import { AssessmentsTable } from '@/components/admin/offerings/assessments-table';
-import { NavigationPage } from '@/components/navigation/page-shell';
-export default function Page() {
-    return <NavigationPage title="Assessments" description="Assessments for this subject offering."><AssessmentsTable assessments={[]} offeringId="" tools={[]} totalWeight={0} endpoint="" contextQuery="" capabilities={{ create: false, view: true, update: false, delete: false }}/></NavigationPage>;
+import { OfferingAssessments } from '@/components/admin/academic-detail-pages';
+import { NavigationEmptyState, NavigationPage } from '@/components/navigation/page-shell';
+import { academicContext } from '@/lib/admin/academic-data';
+export default async function Page({ params, searchParams }: PageProps<'/navigation/institution/offerings/[offeringId]'>) {
+    const { offeringId } = await params;
+    const query = await searchParams;
+    const context = await academicContext(query);
+    if (!context.institution) return <NavigationPage title="Assessments"><NavigationEmptyState title="Choose an institution"/></NavigationPage>;
+    return <OfferingAssessments institutionId={context.institution.id} offeringId={offeringId} searchParams={query} navigation/>;
 }

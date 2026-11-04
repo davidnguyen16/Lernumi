@@ -137,12 +137,12 @@ export function AssessmentsTable({ assessments, offeringId, tools, totalWeight, 
                     </Badge>
                     <span className="text-muted-foreground text-sm">
                         {complete
-                ? 'Edit or reduce an existing weight before adding another assessment.'
+                ? 'All 100% is allocated. New practice items can have zero weight.'
                 : 'The grading plan is still incomplete.'}
                     </span>
                     <div className="flex-1"/>
-                    {capabilities.create && (<Button disabled={totalWeight >= 100} title={totalWeight >= 100
-                    ? 'The grading plan already totals 100%.'
+                    {capabilities.create && (<Button title={totalWeight >= 100
+                    ? 'The grading plan totals 100%; additional assessments must have zero weight.'
                     : undefined} onClick={() => setEditing('create')}>
                             <HugeiconsIcon icon={Add01Icon} strokeWidth={2}/>
                             New assessment
@@ -157,7 +157,7 @@ function AssessmentForm({ endpoint, tools, assessment, totalWeight, contextQuery
     contextQuery?: string;
     onCancel: () => void;
 }) {
-    const maximumWeight = 100 - totalWeight + (assessment?.weight ?? 0);
+    const maximumWeight = Math.max(0, Math.round((100 - totalWeight + (assessment?.weight ?? 0)) * 100) / 100);
     const schema = useMemo(() => AssessmentSchema.superRefine((value, context) => {
         if (value.weight > maximumWeight + Number.EPSILON) {
             context.addIssue({
@@ -182,7 +182,7 @@ function AssessmentForm({ endpoint, tools, assessment, totalWeight, contextQuery
                 expectedDue: assessment.expectedDue ?? '',
                 toolIds: assessment.tools.map((tool) => tool.id),
             } as AssessmentFormValue,
-        }} createEndpoint={endpointFor(endpoint, contextQuery)} editEndpoint={assessment
+        }} transformValues={({ toolIds, ...values }) => ({ ...values, allowedToolIds: toolIds })} createEndpoint={endpointFor(endpoint, contextQuery)} editEndpoint={assessment
             ? endpointFor(`${endpoint}/${assessment.id}`, contextQuery)
             : undefined} title={{ create: 'New assessment', edit: 'Edit assessment' }} description={{
             create: 'Add one item to this offering’s grading plan.',
@@ -192,7 +192,7 @@ function AssessmentForm({ endpoint, tools, assessment, totalWeight, contextQuery
                     <ResourceFormSection title="Assessment details" description="Define what students submit and how much it contributes to the final result.">
                         <div className="grid gap-5 md:grid-cols-2">
                             <FormInput control={form.control} name="name" label="Name" placeholder="Project report" autoComplete="off"/>
-                            <FormInput control={form.control} name="weight" label="Weight (%)" description="The offering total may not exceed 100%." type="number" min="0.01" max={maximumWeight} step="0.01" inputMode="decimal"/>
+                            <FormInput control={form.control} name="weight" label="Weight (%)" description="The offering total may not exceed 100%." type="number" min="0" max={maximumWeight} step="0.01" inputMode="decimal"/>
                             <div className="md:col-span-2">
                                 <FormTextarea control={form.control} name="description" label="Description" description="Optional." placeholder="What students are expected to submit." rows={3}/>
                             </div>
@@ -249,7 +249,7 @@ function AssessmentActions({ assessment, endpoint, contextQuery, capabilities, o
                             Edit
                         </DropdownMenuItem>)}
                     {capabilities.update && capabilities.delete && <DropdownMenuSeparator />}
-                    {capabilities.delete && (<DeleteResourceDialog endpoint={endpointFor(`${endpoint}/${assessment.id}`, contextQuery)} title={`Delete ${assessment.name}?`} description="Deletion is unavailable." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
+                    {capabilities.delete && (<DeleteResourceDialog endpoint={endpointFor(`${endpoint}/${assessment.id}`, contextQuery)} title={`Delete ${assessment.name}?`} description="This permanently removes the assessment. Assessments with attempts must be retained." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
                                     <HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/>
                                     Delete
                                 </DropdownMenuItem>}/>)}

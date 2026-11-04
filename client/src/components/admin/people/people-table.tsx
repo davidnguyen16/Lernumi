@@ -1,5 +1,6 @@
 'use client';
 import { ResourceActionDialog } from '@/components/admin/resource-action-dialog';
+import { api } from '@/lib/api/client';
 import { ResourceFormPage,ResourceFormSection,} from '@/components/admin/resource-form-page';
 import { UrlSelectFilter } from '@/components/admin/url-select-filter';
 import { useListQuery } from '@/components/admin/use-list-query';
@@ -215,7 +216,7 @@ function AssignmentForm({ users, roles, offerings, endpoint, contextQuery, onCan
     return (<ResourceFormPage<RoleAssignmentFormValue, RoleAssignmentSchemaValue> schema={RoleAssignmentSchema} emptyValues={EMPTY_ROLE_ASSIGNMENT_FORM} createEndpoint={endpointFor(endpoint, contextQuery)} title={{ create: 'Grant role', edit: 'Grant role' }} description={{
             create: 'Choose a person and role. An offering scope can be added now or later.',
             edit: 'Role assignments are revoked and re-granted rather than edited.',
-        }} submitLabel={{ create: 'Grant role', edit: 'Grant role' }} onCancel={onCancel}>
+        }} transformValues={({ offeringId, ...values }) => ({ ...values, offeringIds: offeringId ? [offeringId] : [] })} submitLabel={{ create: 'Grant role', edit: 'Grant role' }} onCancel={onCancel}>
             {(form) => (<ResourceFormSection title="Assignment" description="Choose who receives the role and optionally connect an offering-scoped role to its first offering.">
                     <AssignmentFields form={form} users={users} roles={roles} offerings={offerings}/>
                 </ResourceFormSection>)}
@@ -357,7 +358,7 @@ function PersonAccessPanel({ person, offerings, endpoint, contextQuery, status, 
                     </section>
 
                     <section className="p-5 md:p-6">
-                        {selectedAssignment ? (<RoleAccessDetail person={person.user} assignment={selectedAssignment} offerings={offerings} scopeEndpoint={endpointFor(`${endpoint}/${selectedAssignment.id}/scopes`, contextQuery)} roleRevokeEndpoint={endpointFor(`${endpoint}/${selectedAssignment.id}/revoke`, contextQuery)} canRevokeRole={roleCapabilities.revoke &&
+                        {selectedAssignment ? (<RoleAccessDetail person={person.user} assignment={selectedAssignment} offerings={offerings} scopeEndpoint={endpointFor(`${endpoint}/${selectedAssignment.id}/scopes`, contextQuery)} roleRevokeEndpoint={endpointFor(`${endpoint}/${selectedAssignment.id}`, contextQuery)} canRevokeRole={roleCapabilities.revoke &&
                 (!selectedAssignment.role.protected || canManageProtectedRoles)} scopeCapabilities={scopeCapabilities} onScopesChange={(scopes) => updateAssignment(selectedAssignment.id, (assignment) => ({
                 ...assignment,
                 scopes,
@@ -382,12 +383,21 @@ function RoleAccessDetail({ person, assignment, offerings, scopeEndpoint, roleRe
     onRoleRevoked: () => void;
 }) {
     const [offeringId, setOfferingId] = useState<string | null>(null);
-    const adding = false;
+    const [adding, setAdding] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const assignedOfferingIds = new Set(assignment.scopes.map((scope) => scope.offering.id));
     const availableOfferings = offerings.filter((offering) => !assignedOfferingIds.has(offering.id));
     async function addScope() {
-        setError('This action is unavailable.');
+        if (!offeringId) return;
+        const offering = availableOfferings.find(item => item.id === offeringId);
+        if (!offering) return;
+        setAdding(true); setError(null);
+        try {
+            const result = await api<{ data: { id: string; grantedById: string | null } }>(scopeEndpoint, { method: 'POST', body: { offeringId } });
+            onScopesChange([...assignment.scopes, { id: result.data.id, source: 'DIRECT', assignedBy: result.data.grantedById, offering }]);
+            setOfferingId(null);
+        } catch (error) { setError(error instanceof Error ? error.message : 'Could not grant access.'); }
+        finally { setAdding(false); }
     }
     return (<div>
             <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
@@ -413,7 +423,7 @@ function RoleAccessDetail({ person, assignment, offerings, scopeEndpoint, roleRe
                     : 'This role is scoped to the offerings listed below.'}
                     </p>
                 </div>
-                {!assignment.revoked && canRevokeRole && (<ResourceActionDialog endpoint={roleRevokeEndpoint} method="PATCH" title={`Revoke ${assignment.role.roleName}?`} description={`This removes the entire role from ${person.firstName} ${person.lastName}, including all of its offering access. The grant remains in history.`} confirmLabel="Revoke role" destructive onCompleted={onRoleRevoked} trigger={<Button variant="outline" size="sm" className="text-destructive">
+                {!assignment.revoked && canRevokeRole && (<ResourceActionDialog endpoint={roleRevokeEndpoint} method="DELETE" title={`Revoke ${assignment.role.roleName}?`} description={`This removes the entire role from ${person.firstName} ${person.lastName}, including all of its offering access. The grant remains in history.`} confirmLabel="Revoke role" destructive onCompleted={onRoleRevoked} trigger={<Button variant="outline" size="sm" className="text-destructive">
                                 <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2}/>
                                 Revoke role
                             </Button>}/>)}
@@ -445,7 +455,7 @@ function RoleAccessDetail({ person, assignment, offerings, scopeEndpoint, roleRe
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <Button type="button" onClick={() => void addScope()} disabled>
+                            <Button type="button" onClick={() => void addScope()} disabled={adding || !offeringId}>
                                 {adding ? (<Spinner />) : (<HugeiconsIcon icon={Add01Icon} strokeWidth={2}/>)}
                                 Add access
                             </Button>
@@ -479,7 +489,7 @@ function RoleAccessDetail({ person, assignment, offerings, scopeEndpoint, roleRe
                                             {scope.offering.subject.subjectName} · {scopeSourceLabel(scope)}
                                         </p>
                                     </div>
-                                    {!assignment.revoked && scopeCapabilities.revoke && (<ResourceActionDialog endpoint={scopeEndpointWithId(scopeEndpoint, scope.id)} method="PATCH" title={`Revoke access to ${offeringLabel(scope.offering)}?`} description={`Only this offering will be removed from ${person.firstName} ${person.lastName}'s ${assignment.role.roleName} role. Other offering scopes remain active.`} confirmLabel="Revoke access" destructive onCompleted={() => onScopesChange(assignment.scopes.filter((current) => current.id !== scope.id))} trigger={<Button variant="ghost" size="sm" className="text-destructive">
+                                    {!assignment.revoked && scopeCapabilities.revoke && (<ResourceActionDialog endpoint={scopeEndpointWithId(scopeEndpoint, scope.id)} method="DELETE" title={`Revoke access to ${offeringLabel(scope.offering)}?`} description={`Only this offering will be removed from ${person.firstName} ${person.lastName}'s ${assignment.role.roleName} role. Other offering scopes remain active.`} confirmLabel="Revoke access" destructive onCompleted={() => onScopesChange(assignment.scopes.filter((current) => current.id !== scope.id))} trigger={<Button variant="ghost" size="sm" className="text-destructive">
                                                     <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2}/>
                                                     Revoke
                                                 </Button>}/>)}

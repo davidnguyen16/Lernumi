@@ -12,32 +12,21 @@ export const RoleSchema = z
         .regex(/^(institution|offering):[a-z0-9]+(?:[._-][a-z0-9]+)*$/, {
         message: 'Use a scope prefix and lowercase segments, e.g. offering:tutor',
     }),
-    roleName: z.string().trim().min(1, { message: 'Name is required' }).max(80),
+    roleName: z.string().trim().min(1, { message: 'Name is required' }).max(200),
     scopeType: z.enum(['INSTITUTION', 'OFFERING'], { message: 'Choose a scope' }),
     requestMode: z.enum(['DISABLED', 'PUBLIC', 'CONDITIONAL'], {
         message: 'Choose who may request this role',
     }),
     autoGrantEmailRegex: z
         .string()
-        .max(200)
+        .max(500)
         .nullable()
         .transform((value) => {
         const trimmed = value?.trim() ?? '';
         return trimmed === '' ? null : trimmed;
-    })
-        .refine((value) => {
-        if (value === null)
-            return true;
-        try {
-            new RegExp(value);
-            return true;
-        }
-        catch {
-            return false;
-        }
-    }, { message: 'Not a valid regular expression' }),
+    }),
     includedRoleIds: z.array(z.uuid({ message: 'Invalid role selection' })).max(100),
-    permissionIds: z.array(z.uuid({ message: 'Invalid permission selection' })).max(200),
+    permissionIds: z.array(z.string().min(1, { message: 'Invalid permission selection' })).max(200),
     prerequisiteRoleIds: z.array(z.uuid({ message: 'Invalid prerequisite role' })).max(100),
 })
     .superRefine((value, context) => {

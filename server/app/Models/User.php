@@ -28,6 +28,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(RoleAssignment::class);
     }
 
+    public function attempts(): HasMany { return $this->hasMany(AssessmentAttempt::class); }
 
     public function sendPasswordResetNotification($token): void
     {

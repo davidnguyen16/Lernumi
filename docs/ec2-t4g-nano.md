@@ -18,7 +18,7 @@ Thông số được kiểm tra từ [AWS T4g](https://aws.amazon.com/ec2/instan
 
 Chọn Ubuntu LTS **ARM64**, image container **`linux/arm64`**. Instance chạy PostgreSQL 17, một pool PHP-FPM nhỏ và Nginx/reverse proxy TLS. Jenkins controller/agent build, Composer install, PHPUnit và build frontend/tool chạy trên máy khác. Next SSR cũng cần host khác; không giả định frontend Next hiện tại có thể tự đổi thành static export. Jenkins công bố khuyến nghị 4 GB+ RAM cho nhóm nhỏ, nên không ghép Jenkins vào ngân sách RAM nano. [Jenkins requirements](https://www.jenkins.io/doc/book/installing/linux/#prerequisites).
 
-Giữ một EC2 ở public subnet với Internet Gateway và một public IPv4 dùng chung cho hai hostname platform/tool. PostgreSQL nằm trong mạng Docker, không publish port database. Cấu trúc tối giản này không cần ALB, NAT Gateway hay RDS; backup vẫn cần nơi lưu tách khỏi instance. Với frontend bổ sung sau, giữ proxy API cùng origin như [hướng dẫn tích hợp](frontend-integration.md), đồng thời để tiến trình SSR ở nơi khác.
+Giữ một EC2 ở public subnet với Internet Gateway và một public IPv4 dùng chung cho hai hostname platform/tool. PostgreSQL nằm trong mạng Docker, không publish port database. Cấu trúc tối giản này không cần ALB, NAT Gateway hay RDS; backup vẫn cần nơi lưu tách khỏi instance. Frontend đã kết nối với backend ở local nhưng chưa được triển khai cloud; khi triển khai, giữ proxy API cùng origin như [hướng dẫn tích hợp](frontend-integration.md), đồng thời để tiến trình Next SSR ở host khác hoặc chọn instance nhiều RAM hơn. Dự toán dưới đây chỉ dành cho backend + PostgreSQL trên nano, chưa gồm chi phí host frontend.
 
 ## 2. Chi phí đã kiểm tra ngày 03/11/2026
 

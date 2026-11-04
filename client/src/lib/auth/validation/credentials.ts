@@ -5,8 +5,10 @@ export const SignUpSchema = z.strictObject({
     email: emailSchema,
     password: z
         .string()
-        .min(12, { message: "Password must be at least 12 character" })
-        .max(128, { message: "Password must not exceed 128 characters" }),
+        .min(10, { message: "Password must be at least 10 characters" })
+        .regex(/[a-zA-Z]/, 'Include at least one letter')
+        .regex(/[0-9]/, 'Include at least one number')
+        .refine(value => new TextEncoder().encode(value).length <= 72, 'Password must not exceed 72 bytes'),
     firstName: z.string().trim().min(1, { message: "First name must be at least 1 character" }).max(100),
     lastName: z.string().trim().min(1, { message: "Last name must be at least 1 character" }).max(100),
 });

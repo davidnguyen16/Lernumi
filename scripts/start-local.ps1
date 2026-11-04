@@ -2,7 +2,8 @@
 param(
     [switch]$Smoke,
     [switch]$Test,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$Client
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +19,9 @@ function Invoke-Docker {
 
 Push-Location $projectRoot
 try {
+    if ($Client -and -not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+        throw 'Install Node.js and pnpm before using -Client.'
+    }
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw 'Install Docker Desktop and start its Linux engine first.'
     }
@@ -47,6 +51,23 @@ try {
     Write-Host "Backend and PostgreSQL are ready. API: http://localhost:$apiPort"
     Write-Host "Database health: http://localhost:$apiPort/api/v1/health"
     Write-Host 'Run docker compose down to stop; the database volume is retained.'
+
+    if ($Client) {
+        Push-Location (Join-Path $projectRoot 'client')
+        try {
+            if (-not (Test-Path -LiteralPath '.env.local')) {
+                Copy-Item -LiteralPath '.env.example' -Destination '.env.local'
+            }
+            & pnpm install --frozen-lockfile
+            if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed.' }
+            Write-Host 'Frontend: http://localhost:3001/auth. Ctrl+C stops Next.js; Docker services keep running.'
+            & pnpm dev
+            if ($LASTEXITCODE -ne 0) { throw "Frontend stopped with exit code $LASTEXITCODE." }
+        }
+        finally {
+            Pop-Location
+        }
+    }
 }
 finally {
     Pop-Location

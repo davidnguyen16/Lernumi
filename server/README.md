@@ -1,6 +1,6 @@
 # Lernumi Laravel API
 
-The Lernumi REST API uses PHP 8.3, Laravel 13, Sanctum, and PostgreSQL 17. The frontend lives in `../client/`; connect it using the contracts in the [API reference](../docs/api-reference.md) and [frontend integration guide](../docs/frontend-integration.md).
+The Lernumi REST API uses PHP 8.3, Laravel 13, Sanctum, and PostgreSQL 17. The connected Next.js frontend lives in `../client/`. See the [frontend setup](../client/README.md), [API reference](../docs/api-reference.md), and [integration guide](../docs/frontend-integration.md).
 
 ## Features
 
@@ -31,7 +31,15 @@ Add `-Smoke -Test` to run live HTTP checks and the full test suite. Use `-SkipBu
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -SkipBuild -Smoke -Test
 ```
 
-The script preserves existing data, passwords, and APP_KEY. If Docker is not running, open Docker Desktop and try again. PHP, Composer, and PostgreSQL do not need to be installed on the host. Start the frontend separately from `client/` when integrating it.
+The script preserves existing data, passwords, and APP_KEY. If Docker is not running, open Docker Desktop and try again. PHP, Composer, and PostgreSQL do not need to be installed on the host.
+
+Add `-Client` to install the frontend dependencies from the lockfile and start Next.js in the foreground. This requires Node.js and pnpm on the host:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -SkipBuild -Client
+```
+
+Open `http://localhost:3001/auth`. The frontend proxies `/api/*` and `/sanctum/*` to Laravel, and its server components forward the authenticated session for private data. Ctrl+C stops Next.js; Docker services continue running. To start the frontend separately, run `pnpm install --frozen-lockfile` and `pnpm dev` from `client/`.
 
 For manual startup or macOS/Linux:
 
@@ -42,12 +50,25 @@ docker compose run --rm api php artisan migrate --seed --no-interaction
 docker compose up -d
 ```
 
+On a fresh clone, run the setup script or the manual `composer run setup` step before plain `docker compose up`. The API needs dependencies installed in its Docker volume before it can start.
+
+- Frontend: `http://localhost:3001`.
 - Main API: `http://localhost:8000`.
 - Health: `GET /up`, `GET /api/v1/health` (includes a database connection check).
 - Tool runtime: `http://127.0.0.1:8000`, using a separate hostname from the API/frontend to isolate cookies.
 - PostgreSQL from the host: `127.0.0.1:5433`, database/user `lernumi`, local password `lernumi_dev`. The API container connects to `postgres:5432`.
 
-The Compose configuration is intended for local development: it bind-mounts the source and uses `artisan serve` with local settings. After editing `.env`, run `docker compose restart api`. After editing Dockerfile/php.ini, run `docker compose up -d --build api`.
+The Compose configuration is intended for local development: it bind-mounts `server/` at `/var/www/html` and uses `artisan serve` with local settings. Composer dependencies are mounted separately at `/var/www/html/vendor` in the named `api_vendor` volume, reducing dependency-file access through the Windows source bind mount. An existing host `server/vendor/` is preserved but hidden by that mount inside the container; it is not the dependency directory used by the running API.
+
+Run Composer through Docker whenever `server/composer.lock` changes. From the project root, rerun the setup script or install the locked dependencies directly into the volume:
+
+```sh
+docker compose run --rm api composer install --prefer-dist --no-interaction
+```
+
+`docker compose run --rm api composer run setup` also installs dependencies and initializes `.env`/APP_KEY if missing. Running Composer only against the host `server/vendor/` does not update the API's dependency volume.
+
+PHP source edits remain available through the bind mount. Local OPcache has `validate_timestamps=On` and `revalidate_freq=0`, so changed PHP files are checked on the next request. After editing `.env`, run `docker compose restart api`. After editing Dockerfile/php.ini, run `docker compose up -d --build api`.
 
 Both services use `restart: unless-stopped` and restart with the Docker engine unless you explicitly stop them. The API healthcheck calls `/api/v1/health` to check the database as well. Docker Desktop must be running after you start your computer; you can configure it to start when you sign in to Windows.
 
@@ -91,7 +112,7 @@ The suites cover authentication/access control, institution boundaries, CRUD and
 
 The smoke script makes real HTTP requests locally: it logs in with all three demo accounts, checks CSRF and academic/access data, uploads a 3 MiB multipart file, checks downloads/ETags and write conflicts, opens a personal tool runtime, loads assets using the runtime cookie, and refreshes the capability token. Temporary workspaces and files are cleaned up afterward. If you changed the demo password, set the matching `DEMO_PASSWORD` in the local `.env`; the script does not print passwords, cookies, or tokens. Local email uses `MAIL_MAILER=log`: verification/reset links appear in `storage/logs/laravel.log` rather than being delivered to an inbox.
 
-`docker compose down` stops the services and preserves the named data volume.
+`docker compose down` stops the services and preserves both named volumes: `postgres_data` for the database and `api_vendor` for Composer dependencies.
 
 ## Code structure
 
@@ -122,4 +143,4 @@ The usual request flow is **Route → authentication middleware → FormRequest 
 - [Writing Jenkins CI/CD and deploying to EC2](../docs/ec2-jenkins-guide.md): required files, networking, TLS, production Docker, secrets, migrations, backups, and rollback.
 - [EC2 t4g.nano: ARM64, memory, and costs](../docs/ec2-t4g-nano.md): the requested small-instance setup, testing under light load, and manual deployment steps.
 
-This repository provides the backend and documentation. Frontend integration, the Jenkins pipeline, and AWS deployment are implemented separately by the project owner using the guides above.
+The frontend and backend are connected locally. The project owner writes the Jenkins pipeline and performs AWS deployment using the guides above.

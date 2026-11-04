@@ -1,20 +1,10 @@
 import { Button } from '@/components/ui/button';
-import { Table,TableBody,TableCell,TableHead,TableHeader,TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ToolVersionActions } from '@/components/admin/tools/tool-version-actions';
+import { getTool } from '@/lib/tool-data';
+import { displayDate } from '@/lib/access-data';
 import Link from 'next/link';
 export default async function ToolDetailPage({ params }: PageProps<'/admin/tools/[id]'>) {
-    const { id } = await params;
-    return <div className="flex flex-col gap-7 pt-1">
-        <header className="flex flex-wrap items-start gap-4 border-b pb-6">
-            <Button nativeButton={false} variant="ghost" render={<Link href="/admin/tools"/>}>Tools</Button>
-            <div className="flex-1"><h1 className="font-heading text-2xl font-semibold tracking-tight">Tool details</h1><p className="text-muted-foreground mt-1 text-sm">No tool selected.</p></div>
-            <Button nativeButton={false} variant="outline" render={<Link href={`/admin/tools/${id}/edit`}/>}>Edit details</Button>
-            <Button nativeButton={false} render={<Link href={`/admin/tools/${id}/versions/new`}/>}>Upload version</Button>
-        </header>
-        <section><h2 className="font-heading mb-4 text-base font-semibold">Version history</h2>
-            <div className="overflow-hidden rounded-xl border"><Table>
-                <TableHeader><TableRow><TableHead>Version</TableHead><TableHead>Package</TableHead><TableHead>Uploaded by</TableHead><TableHead>Uploaded</TableHead><TableHead>Release notes</TableHead></TableRow></TableHeader>
-                <TableBody><TableRow><TableCell colSpan={5} className="text-muted-foreground h-28 text-center">No package has been uploaded.</TableCell></TableRow></TableBody>
-            </Table></div>
-        </section>
-    </div>;
+    const { id } = await params; const tool = await getTool(id);
+    return <div className="flex flex-col gap-7 pt-1"><header className="flex flex-wrap items-start gap-4 border-b pb-6"><Button nativeButton={false} variant="ghost" render={<Link href="/admin/tools" />}>Tools</Button><div className="flex-1"><h1 className="font-heading text-2xl font-semibold">{tool.name}</h1><p className="text-muted-foreground mt-1 text-sm">{tool.code} · {tool.description}</p>{tool.codeBaseLocation && <a className="text-primary text-sm underline" href={tool.codeBaseLocation} target="_blank" rel="noreferrer">Source code</a>}</div><Button nativeButton={false} variant="outline" render={<Link href={'/admin/tools/' + id + '/edit'} />}>Edit details</Button><Button nativeButton={false} render={<Link href={'/admin/tools/' + id + '/versions/new'} />}>Upload version</Button></header><section><h2 className="font-heading mb-4 text-base font-semibold">Version history</h2><div className="overflow-auto rounded-xl border"><Table><TableHeader><TableRow><TableHead>Version</TableHead><TableHead>Package</TableHead><TableHead>Uploaded</TableHead><TableHead>Release notes</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>{tool.versions?.length ? tool.versions.map(version => <TableRow key={version.id}><TableCell className="font-mono">{version.version}</TableCell><TableCell>{(version.compressedSize / 1024).toFixed(1)} KiB · {version.fileCount} files</TableCell><TableCell>{displayDate(version.createdAt)}</TableCell><TableCell>{version.releaseNotes ?? '—'}</TableCell><TableCell><ToolVersionActions toolId={id} versionId={version.id} active={tool.activeVersionId === version.id} /></TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="h-28 text-center">No package has been uploaded.</TableCell></TableRow>}</TableBody></Table></div></section></div>;
 }

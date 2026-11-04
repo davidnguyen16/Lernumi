@@ -30,6 +30,7 @@ class SubjectController
         $sortColumn = ['subjectCode' => 'subject_code', 'name' => 'subject_name', 'createdAt' => 'created_at'][ltrim($sort, '-')];
 
         $subjects = $institution->subjects()
+            ->withCount('offerings')
             ->when($search !== null && $search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     // strpos treats '%' and '_' literally, unlike an unescaped LIKE search.
@@ -61,7 +62,7 @@ class SubjectController
     public function show(Request $request, Institution $institution, Subject $subject): SubjectResource
     {
         $this->access->authorize($request->user(), 'subject.view', $institution);
-        return new SubjectResource($subject);
+        return new SubjectResource($subject->loadCount('offerings'));
     }
 
     public function update(UpdateSubjectRequest $request, Institution $institution, Subject $subject): SubjectResource

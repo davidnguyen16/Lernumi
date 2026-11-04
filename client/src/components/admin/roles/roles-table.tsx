@@ -212,7 +212,7 @@ function RoleForm({ role, institutions, rolesByInstitution, permissions, presetI
                 permissionIds: role.permissions.map((permission) => permission.id),
                 prerequisiteRoleIds: role.prerequisiteRoles.map((prerequisite) => prerequisite.id),
             } as unknown as RoleFormValue,
-        }} createEndpoint={endpointFor(endpoint, contextQuery)} editEndpoint={role ? endpointFor(`${endpoint}/${role.id}`, contextQuery) : undefined} title={{ create: 'New role', edit: 'Edit role' }} description={{
+        }} createEndpoint={values => endpointFor(`/api/v1/institutions/${values.institutionId}/roles`, contextQuery)} editEndpoint={role ? endpointFor(`/api/v1/institutions/${role.institution.id}/roles/${role.id}`, contextQuery) : undefined} transformValues={({ permissionIds, prerequisiteRoleIds, ...values }) => ({ ...values, permissions: permissionIds, requiredRoleIds: prerequisiteRoleIds })} title={{ create: 'New role', edit: 'Edit role' }} description={{
             create: 'A role someone can hold at an institution.',
             edit: 'Changes apply to everyone who holds this role.',
         }} onCancel={onCancel}>
@@ -357,7 +357,7 @@ function RowActions({ role, locked, endpoint, contextQuery, capabilities, onEdit
 
                     {capabilities.update && capabilities.delete && <DropdownMenuSeparator />}
 
-                    {capabilities.delete && <DeleteResourceDialog endpoint={endpointFor(`${endpoint}/${role.id}`, contextQuery)} title={`Delete ${role.roleName}?`} description="Deletion is unavailable." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
+                    {capabilities.delete && <DeleteResourceDialog endpoint={endpointFor(`/api/v1/institutions/${role.institution.id}/roles/${role.id}`, contextQuery)} title={`Delete ${role.roleName}?`} description="The role can be deleted when no assignments, requests or other roles reference it." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
                                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/>
                                 Delete
                             </DropdownMenuItem>}/>}

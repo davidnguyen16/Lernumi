@@ -21,13 +21,13 @@ class AdminUserController
     public function index(IndexAccessRequest $request)
     {
         abort_unless($this->access->isAdmin($request->user()), 403);
-        return UserResource::collection(User::query()->when($request->input('search'), fn ($q, $search) => $q->whereRaw('strpos(lower(name), lower(?)) > 0 OR strpos(lower(email), lower(?)) > 0', [$search, $search]))->orderBy('name')->orderBy('id')->paginate($request->integer('perPage', 20))->withQueryString());
+        return UserResource::collection(User::withCount(['roleAssignments' => fn ($q) => $q->whereNull('revoked_at'), 'attempts'])->when($request->input('search'), fn ($q, $search) => $q->whereRaw('strpos(lower(name), lower(?)) > 0 OR strpos(lower(email), lower(?)) > 0', [$search, $search]))->orderBy('name')->orderBy('id')->paginate($request->integer('perPage', 20))->withQueryString());
     }
 
     public function show(Request $request, User $user)
     {
         abort_unless($this->access->isAdmin($request->user()), 403);
-        return new UserResource($user);
+        return new UserResource($user->loadCount(['roleAssignments' => fn ($q) => $q->whereNull('revoked_at'), 'attempts']));
     }
 
     public function store(AdminUserRequest $request)
@@ -65,7 +65,9 @@ class AdminUserController
 
     public function permissions(Request $request)
     {
-        return response()->json(['data' => Permission::orderBy('code')->get()->map(fn ($permission) => ['code' => $permission->code, 'description' => $permission->description, 'institutionOnly' => \App\Services\PermissionCatalog::institutionOnly($permission->code)])]);
+        $query = Permission::orderBy('code');
+        if ($this->access->isAdmin($request->user())) $query->withCount('roles');
+        return response()->json(['data' => $query->get()->map(fn ($permission) => ['code' => $permission->code, 'description' => $permission->description, 'institutionOnly' => \App\Services\PermissionCatalog::institutionOnly($permission->code), 'activeRoles' => $this->access->isAdmin($request->user()) ? $permission->roles_count : null])]);
     }
 
     public function audit(IndexAccessRequest $request, ?Institution $institution = null)

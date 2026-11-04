@@ -13,6 +13,9 @@ import { TermGantt } from './term-gantt';
 import type { CalendarAssessment,CalendarData,CalendarOffering,CalendarTerm } from './types';
 import { EventBlock,EventEditor,reportError,useEventInteractions,type EditorState,type EventDraft,} from './week-events';
 import { addDays,buildTermWeeks,dayKeyOf,formatDay,localTimeOf,minutesOf,mondayOf,weekDays,type DayKey,type TermWeek } from './weeks';
+import { api } from '@/lib/api/client';
+import { calendarInstant } from '@/lib/learning/calendar-time';
+import { useRouter } from 'next/navigation';
 const HOUR_START = 0;
 const HOUR_END = 24;
 const HOUR_HEIGHT = 44;
@@ -48,8 +51,8 @@ export function CalendarPlanner({ data, today, initialEvents, initialPlans, }: {
     initialPlans: AssessmentPlanDto[];
 }) {
     const { timeZone } = data;
-    const [events] = useState<CalendarEventDto[]>(initialEvents);
-    const [plans] = useState<AssessmentPlanDto[]>(initialPlans);
+    const events = initialEvents;
+    const plans = initialPlans;
     const sortedTerms = useMemo(() => [...data.terms].sort((a, b) => b.year - a.year || b.session - a.session), [data.terms]);
     const [termId, setTermId] = useState<string | null>(() => (termContaining(sortedTerms, today, timeZone) ?? sortedTerms[0])?.id ?? null);
     const term = sortedTerms.find((entry) => entry.id === termId) ?? null;
@@ -66,12 +69,12 @@ export function CalendarPlanner({ data, today, initialEvents, initialPlans, }: {
     const focusMonday = focus && focus.termId === termId ? focus.monday : defaultMonday;
     const setFocusMonday = (monday: DayKey) => setFocus({ termId, monday });
     if (!term) {
-        return (<div className="bg-card rounded-xl border p-8 text-center">
+        return (<div className="space-y-5"><div className="bg-card rounded-xl border p-8 text-center">
                 <p className="font-medium">No study term to show yet</p>
                 <p className="text-muted-foreground mt-1 text-sm">
-                    Your calendar fills in once you have access to a subject offering.
+                    Study periods appear once you have access to a subject offering. You can add personal events below.
                 </p>
-            </div>);
+            </div><WeekView monday={focusMonday} weeks={[]} today={today} timeZone={timeZone} assessments={[]} offerings={[]} events={events} onMove={(delta) => setFocusMonday(addDays(focusMonday, delta * 7))} onToday={() => setFocusMonday(mondayOf(today))}/></div>);
     }
     return (<div className="flex flex-col gap-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -117,7 +120,8 @@ function WeekView({ monday, weeks, today, timeZone, assessments, offerings, even
         anchor: DOMRect | null;
     } | null>(null);
     const pressedRectRef = useRef<DOMRect | null>(null);
-    const [saving] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const router = useRouter();
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: (8 - HOUR_START) * HOUR_HEIGHT - 10 });
     }, []);
@@ -138,7 +142,13 @@ function WeekView({ monday, weeks, today, timeZone, assessments, offerings, even
         const height = ((draft.endMin - draft.startMin) / 60) * HOUR_HEIGHT;
         return new DOMRect(rect.left + GUTTER_PX + index * dayWidth, top, dayWidth, height);
     };
-    const persistMove: (event: CalendarEventDto, draft: EventDraft) => Promise<void> = async () => { reportError(new Error('This action is unavailable.')); };
+    const persistMove = async (event: CalendarEventDto, draft: EventDraft): Promise<void> => {
+        if (saving) return;
+        setSaving(true);
+        try { await api(`/api/v1/me/calendar-events/${event.id}`, { method: 'PATCH', body: { startAt: calendarInstant(draft.day, draft.startMin, timeZone), endAt: calendarInstant(draft.day, draft.endMin, timeZone) } }); router.refresh(); }
+        catch (error) { reportError(error); }
+        finally { setSaving(false); }
+    };
     const interactions = useEventInteractions({
         gridRef,
         days,
@@ -162,8 +172,22 @@ function WeekView({ monday, weeks, today, timeZone, assessments, offerings, even
         startMin: number;
         endMin: number;
         offeringId: string | null;
-    }) => Promise<void> = async () => { reportError(new Error('This action is unavailable.')); };
-    const deleteFromEditor = async () => { reportError(new Error('This action is unavailable.')); };
+    }) => Promise<void> = async (input) => {
+        if (!editor || saving) return;
+        setSaving(true);
+        try {
+            await api(editor.state.mode === 'edit' ? `/api/v1/me/calendar-events/${editor.state.event.id}` : '/api/v1/me/calendar-events', { method: editor.state.mode === 'edit' ? 'PATCH' : 'POST', body: { title: input.title, note: input.note || null, startAt: calendarInstant(input.day, input.startMin, timeZone), endAt: calendarInstant(input.day, input.endMin, timeZone), offeringId: input.offeringId } });
+            setEditor(null); router.refresh();
+        } catch (error) { reportError(error); }
+        finally { setSaving(false); }
+    };
+    const deleteFromEditor = async () => {
+        if (!editor || editor.state.mode !== 'edit' || saving) return;
+        setSaving(true);
+        try { await api(`/api/v1/me/calendar-events/${editor.state.event.id}`, { method: 'DELETE' }); setEditor(null); router.refresh(); }
+        catch (error) { reportError(error); }
+        finally { setSaving(false); }
+    };
     const byDay = new Map<DayKey, {
         allDay: PlacedAssessment[];
         timed: PlacedAssessment[];

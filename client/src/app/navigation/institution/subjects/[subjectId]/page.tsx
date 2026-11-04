@@ -1,4 +1,5 @@
-import { NavigationEmptyState,NavigationPage } from '@/components/navigation/page-shell';
-export default function Page() {
-    return <NavigationPage title="Subject overview" description="Subject identity and scheduled offerings." backHref="/navigation/institution/subjects"><NavigationEmptyState title="No subject selected" description="Subject details will appear here when available."/></NavigationPage>;
+import { SubjectOverview } from '@/components/admin/academic-detail-pages';
+export default async function Page({ params, searchParams }: PageProps<'/navigation/institution/subjects/[subjectId]'>) {
+    const { subjectId } = await params;
+    return <SubjectOverview subjectId={subjectId} searchParams={await searchParams}/>;
 }

@@ -9,6 +9,8 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import Link from 'next/link';
 import { useMemo,useState } from 'react';
 import { toast } from 'sonner';
+import { api } from '@/lib/api/client';
+import { useRouter } from 'next/navigation';
 export type SubjectAccessOffering = {
     id: string;
     subjectCode: string;
@@ -64,7 +66,8 @@ export function SubjectAccess({ roles, offerings, initialAssignmentId, }: {
     const [adding, setAdding] = useState(false);
     const [assignmentId, setAssignmentId] = useState(initialAssignmentId);
     const [offering, setOffering] = useState<SubjectAccessOffering | null>(null);
-    const [submitting] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const router = useRouter();
     const [error, setError] = useState<string | null>(null);
     const selectedRole = roles.find((role) => role.assignmentId === assignmentId) ?? null;
     const availableOfferings = useMemo(() => {
@@ -107,7 +110,11 @@ export function SubjectAccess({ roles, offerings, initialAssignmentId, }: {
         setAdding(true);
     }
     async function submit() {
-        toast.info('This action is unavailable.');
+        if (!selectedRole || !offering) return;
+        setSubmitting(true); setError(null);
+        try { await api(`/api/v1/institutions/${selectedRole.institution.id}/scope-requests`, { method: 'POST', body: { roleAssignmentId: selectedRole.assignmentId, offeringId: offering.id } }); toast.success('Subject access request sent.'); setAdding(false); setOffering(null); router.refresh(); }
+        catch (error) { setError(error instanceof Error ? error.message : 'Could not request subject access.'); }
+        finally { setSubmitting(false); }
     }
     if (roles.length === 0) {
         return (<main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-4xl items-center py-10 sm:py-16">
@@ -266,7 +273,7 @@ export function SubjectAccess({ roles, offerings, initialAssignmentId, }: {
                                 </p>)}
 
                             <div className="mt-6 flex justify-end">
-                                <Button type="button" disabled onClick={() => void submit()}>
+                                <Button type="button" disabled={submitting || !offering} onClick={() => void submit()}>
                                     {submitting ? (<Spinner />) : (<HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} data-icon="inline-start"/>)}
                                     Send request
                                 </Button>

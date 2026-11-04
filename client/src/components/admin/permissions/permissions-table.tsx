@@ -31,7 +31,7 @@ export function PermissionsTable({ permissions, page, pageCount, total, sort, di
                         </span>),
         }),
         column.accessor('activeRoles', {
-            header: 'Active roles',
+            header: 'Direct role grants',
             enableSorting: false,
             cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
         }),

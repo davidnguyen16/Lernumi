@@ -11,6 +11,7 @@ class StudyTermResource extends JsonResource
     {
         return ['id' => $this->id, 'institutionId' => $this->institution_id, 'year' => $this->year, 'session' => $this->session,
             'periods' => StudyTermPeriodResource::collection($this->whenLoaded('periods')),
+            'offeringCount' => $this->whenCounted('offerings'),
             'createdAt' => $this->created_at->toISOString(), 'updatedAt' => $this->updated_at->toISOString()];
     }
 }

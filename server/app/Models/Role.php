@@ -17,4 +17,5 @@ class Role extends Model
     public function includedRoles(): BelongsToMany { return $this->belongsToMany(self::class, 'role_inclusions', 'including_role_id', 'included_role_id'); }
     public function requiredRoles(): BelongsToMany { return $this->belongsToMany(self::class, 'role_request_visibilities', 'requestable_role_id', 'required_role_id'); }
     public function assignments(): HasMany { return $this->hasMany(RoleAssignment::class); }
+    public function requests(): HasMany { return $this->hasMany(RoleRequest::class); }
 }

@@ -10,3 +10,6 @@ next-env.d.ts
 *.log
 .DS_Store
 .vercel/
+# Browser test artifacts can contain authenticated session details.
+/playwright-report/
+/test-results/

@@ -128,7 +128,7 @@ function PeriodActions({ period, endpoint, contextQuery, capabilities, onEdit, }
                             Edit
                         </DropdownMenuItem>)}
                     {capabilities.update && capabilities.delete && <DropdownMenuSeparator />}
-                    {capabilities.delete && <DeleteResourceDialog endpoint={endpointFor(`${endpoint}/${period.id}`, contextQuery)} title={`Delete ${period.name}?`} description="Deletion is unavailable." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
+                    {capabilities.delete && <DeleteResourceDialog endpoint={endpointFor(`${endpoint}/${period.id}`, contextQuery)} title={`Delete ${period.name}?`} description="This permanently removes this calendar period." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
                                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/>
                                 Delete
                             </DropdownMenuItem>}/>}

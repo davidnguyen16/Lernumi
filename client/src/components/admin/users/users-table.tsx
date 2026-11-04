@@ -6,13 +6,17 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Shield01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { api } from '@/lib/api/client';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 export type UserListItem = {
     id: string;
     email: string;
     firstName: string;
     lastName: string;
     isSystemAdmin: boolean;
+    isActive: boolean;
     joined: string;
     counts: {
         roles: number;
@@ -50,7 +54,7 @@ export function UsersTable({ users, currentUserId, page, pageCount, total, sort,
         }),
         column.accessor((row) => row.counts.attempts, {
             id: 'attempts',
-            header: 'Attempts',
+            header: 'Attempts started',
             cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
         }),
         column.accessor('joined', {
@@ -62,6 +66,7 @@ export function UsersTable({ users, currentUserId, page, pageCount, total, sort,
             header: 'Admin',
             cell: (info) => (<AdminToggle user={info.row.original} currentUserId={currentUserId}/>),
         }),
+        column.accessor('isActive', { header: 'Active', cell: (info) => <AccountToggle user={info.row.original} field="isActive" disabled={info.row.original.id === currentUserId} /> }),
     ] as Array<AdminColumnDef<UserListItem>>, [currentUserId]);
     return (<DataTable columns={columns} data={users} emptyMessage={list.input
             ? `No accounts match "${list.input}".`
@@ -96,10 +101,22 @@ function AdminToggle({ user, currentUserId }: {
     const isSelf = user.id === currentUserId;
     return (<div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-                <Switch checked={user.isSystemAdmin} disabled aria-label={`System admin for ${user.email}`}/>
+                <AccountToggle user={user} field="isAdmin" />
                 {user.isSystemAdmin && (<HugeiconsIcon icon={Shield01Icon} strokeWidth={2} className="text-brand-teal size-4"/>)}
             </div>
 
             {isSelf && <span className="text-muted-foreground text-xs">You</span>}
         </div>);
+}
+function AccountToggle({ user, field, disabled = false }: { user: UserListItem; field: 'isAdmin' | 'isActive'; disabled?: boolean }) {
+    const [pending, setPending] = useState(false);
+    const router = useRouter();
+    const checked = field === 'isAdmin' ? user.isSystemAdmin : user.isActive;
+    async function update(value: boolean) {
+        setPending(true);
+        try { await api(`/api/v1/admin/users/${user.id}`, { method: 'PATCH', body: { [field]: value } }); router.refresh(); }
+        catch (error) { toast.error(error instanceof Error ? error.message : 'Could not update this account.'); }
+        finally { setPending(false); }
+    }
+    return <Switch checked={checked} disabled={disabled || pending} onCheckedChange={value => void update(value)} aria-label={`${field === 'isAdmin' ? 'System admin' : 'Active account'} for ${user.email}`} />;
 }

@@ -38,6 +38,7 @@ services:
       - "127.0.0.1:${LERNUMI_API_PORT:-8000}:8000"
     volumes:
       - ./server:/var/www/html
+      - api_vendor:/var/www/html/vendor
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,3 +53,4 @@ services:
 
 volumes:
   postgres_data:
+  api_vendor:

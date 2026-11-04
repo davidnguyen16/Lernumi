@@ -16,6 +16,7 @@ export type ReviewAttempt = {
     toolNames: string[];
     replay: {
             toolName: string;
+            workSessionId?: string;
     } | null;
 };
 export type ReviewStudent = {
@@ -169,7 +170,7 @@ export function AssessmentAttemptBrowser({ students, canReplay, }: {
                                             </>)}
                                     </div>
                                     <div className="flex justify-end">
-                                        {canReplay && attempt.replay ? (<LaunchReplayButton />) : (<span className="text-muted-foreground text-right text-xs">
+                                        {canReplay && attempt.replay ? (<LaunchReplayButton workSessionId={attempt.replay.workSessionId} />) : (<span className="text-muted-foreground text-right text-xs">
                                                 {attempt.sessionCount === 0
                         ? 'No recording'
                         : 'Unavailable for this role'}

@@ -1,5 +1,6 @@
 'use client';
 import { FormAlert } from '@/components/auth/form-alert';
+import { api, ApiError } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
@@ -22,7 +23,7 @@ export function ToolPackageForm({ tool, versionOnly = false, backHref: backHrefO
     const inputRef = useRef<HTMLInputElement>(null);
     const [file, setFile] = useState<File | null>(null);
     const [dragging, setDragging] = useState(false);
-    const submitting = false;
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string>();
     const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
     const [activate, setActivate] = useState(true);
@@ -45,7 +46,16 @@ export function ToolPackageForm({ tool, versionOnly = false, backHref: backHrefO
     }
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        setError('Uploads are unavailable.');
+        if (!file) { setError('Choose a ZIP package first.'); return; }
+        setSubmitting(true); setError(undefined); setFieldErrors({});
+        try {
+            const data = new FormData(); data.set('package', file); data.set('activate', activate ? '1' : '0'); data.set('releaseNotes', releaseNotes);
+            if (create) { data.set('name', name); data.set('code', code); data.set('description', description); data.set('codeBaseLocation', codeBaseLocation); }
+            if (!create && !tool) throw new Error('Select a tool before uploading a version.');
+            const result = await api<{ data: { id: string } }>(create ? '/api/v1/admin/tools' : `/api/v1/admin/tools/${tool!.id}/versions`, { method: 'POST', body: data });
+            router.push(create ? `/admin/tools/${result.data.id}` : `/admin/tools/${tool!.id}`); router.refresh();
+        } catch (error) { if (error instanceof ApiError) setFieldErrors(error.errors); setError(error instanceof Error ? error.message : 'Could not upload the package.'); }
+        finally { setSubmitting(false); }
     }
     return (<section className="bg-background -mx-5 min-h-[calc(100dvh-4rem)] px-5 pb-10 md:-mx-6 md:px-6">
             <form onSubmit={submit} className="mx-auto flex w-full max-w-7xl flex-col" noValidate>
@@ -106,7 +116,7 @@ export function ToolPackageForm({ tool, versionOnly = false, backHref: backHrefO
 
                 <footer className="border-border bg-background/95 sticky bottom-0 mt-auto flex justify-end gap-3 border-t py-4 backdrop-blur-sm">
                     <Button type="button" variant="outline" onClick={() => router.push(backHref)} disabled={submitting}>Cancel</Button>
-                    <Button type="submit" disabled>{submitting && <Spinner />}{create ? 'Create and deploy' : 'Upload version'}</Button>
+                    <Button type="submit" disabled={submitting || !file}>{submitting && <Spinner />}{create ? 'Create and activate' : 'Upload version'}</Button>
                 </footer>
             </form>
         </section>);

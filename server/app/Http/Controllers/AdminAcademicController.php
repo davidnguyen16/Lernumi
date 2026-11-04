@@ -24,7 +24,7 @@ class AdminAcademicController
     public function subjects(IndexAcademicRequest $request)
     {
         abort_unless($this->access->isAdmin($request->user()), 403);
-        $query = Subject::query();
+        $query = Subject::query()->withCount('offerings');
         if ($request->has('institutionId')) $query->where('institution_id', $request->validated('institutionId'));
         $this->searchAcademic($query, $request, ['subject_code', 'subject_name']);
         return SubjectResource::collection($this->paginateAcademic($query, $request, ['name' => 'subject_name', 'subjectCode' => 'subject_code', 'createdAt' => 'created_at'], 'subjectCode'));
@@ -33,7 +33,7 @@ class AdminAcademicController
     public function terms(IndexAcademicRequest $request)
     {
         abort_unless($this->access->isAdmin($request->user()), 403);
-        $query = StudyTerm::query()->with('periods');
+        $query = StudyTerm::query()->with('periods')->withCount('offerings');
         foreach (['institutionId' => 'institution_id', 'year' => 'year', 'session' => 'session'] as $field => $column)
             if ($request->has($field)) $query->where($column, $request->validated($field));
         return StudyTermResource::collection($this->paginateAcademic($query, $request, ['year' => 'year', 'createdAt' => 'created_at'], '-year', ['session']));

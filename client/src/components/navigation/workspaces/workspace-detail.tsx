@@ -12,6 +12,9 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { usePathname,useRouter,useSearchParams } from 'next/navigation';
 import { useMemo,useRef,useState,type InputHTMLAttributes } from 'react';
 import { toast } from 'sonner';
+import { api } from '@/lib/api/client';
+import { launchTool as openTool } from '@/lib/api/tools';
+import { DocumentContentEditor } from './document-content-editor';
 type DocumentItem = {
     id: string;
     name: string;
@@ -29,7 +32,7 @@ type WorkspaceTool = {
     name: string;
     description: string | null;
 };
-type ToolLaunch = { mode: 'PERSONAL' | 'WORK' };
+type ToolLaunch = ({ mode: 'PERSONAL' } | { mode: 'WORK'; attemptId: string }) & { roleAssignmentId?: string | null };
 export function WorkspaceDetail({ workspaceId, readOnly, currentFolderId, folderIds, breadcrumbs, documents, tools, toolLaunch, }: {
     workspaceId: string;
     readOnly: boolean;
@@ -55,9 +58,12 @@ export function WorkspaceDetail({ workspaceId, readOnly, currentFolderId, folder
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
     const [deleteTargets, setDeleteTargets] = useState<DocumentItem[] | null>(null);
-    const [pending] = useState(false);
-    const [pendingLabel] = useState<string | null>(null);
-    const [launchingToolId] = useState<string | null>(null);
+    const [pending, setPending] = useState(false);
+    const [pendingLabel, setPendingLabel] = useState<string | null>(null);
+    const [launchingToolId, setLaunchingToolId] = useState<string | null>(null);
+    const [editingDocument, setEditingDocument] = useState<DocumentItem | null>(null);
+    const endpoint = `/api/v1/workspaces/${workspaceId}/documents`;
+    const fail = (error: unknown) => toast.error(error instanceof Error ? error.message : 'The operation could not be completed.');
     const visibleEntries = useMemo(() => [...documents].sort((left, right) => Number(right.entryKind === 'FOLDER') - Number(left.entryKind === 'FOLDER') ||
         left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' })), [documents]);
     const validFolderIds = useMemo(() => new Set(['', ...folderIds]), [folderIds]);
@@ -70,6 +76,7 @@ export function WorkspaceDetail({ workspaceId, readOnly, currentFolderId, folder
     const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
     const selectedItems = useMemo(() => visibleEntries.filter((document) => selectedIdSet.has(document.id)), [selectedIdSet, visibleEntries]);
     const selectedItem = selectedItems.length === 1 ? selectedItems[0] : null;
+    const selectedTextFile = selectedItem?.entryKind === 'FILE' && (selectedItem.sizeBytes ?? 0) <= 1024 * 1024 && (/^text\//.test(selectedItem.mimeType ?? '') || /\.(txt|md|json|[cm]?js|jsx|tsx?|css|html?|xml|ya?ml|csv|php|py|java|sql|sh)$/i.test(selectedItem.name)) ? selectedItem : null;
     const selectedFiles = selectedItems.filter((document) => document.entryKind === 'FILE' && document.downloadHref);
     function clearSelection() {
         setSelectedIds([]);
@@ -116,9 +123,37 @@ export function WorkspaceDetail({ workspaceId, readOnly, currentFolderId, folder
         clearSelection();
     }
     async function createFolder() {
-        toast.info('This action is unavailable.');
+        if (!folderName.trim() || pending || readOnly) return;
+        setPending(true);
+        try { await api(endpoint, { method: 'POST', body: { name: folderName.trim(), entryKind: 'FOLDER', parentFolderId: currentFolderId } }); setCreatingFolder(false); setFolderName(''); router.refresh(); }
+        catch (error) { fail(error); }
+        finally { setPending(false); }
     }
-    const uploadFiles: (files: File[], preserveFolders: boolean) => Promise<void> = async () => { toast.info('This action is unavailable.'); };
+    const uploadFiles = async (files: File[], preserveFolders: boolean): Promise<void> => {
+        if (pending || readOnly || files.length === 0) return;
+        setPending(true);
+        const folders = new Map<string, string>();
+        let uploaded = 0;
+        try {
+            for (const file of files) {
+                setPendingLabel(`Uploading ${uploaded + 1} of ${files.length}`);
+                let parentId = currentFolderId;
+                const segments = preserveFolders && file.webkitRelativePath ? file.webkitRelativePath.split('/').filter(Boolean) : [file.name];
+                const name = segments.pop() ?? file.name;
+                let path = '';
+                for (const segment of segments) {
+                    path += `/${segment}`;
+                    let id = folders.get(path);
+                    if (!id) { const result = await api<{ data: { id: string } }>(endpoint, { method: 'POST', body: { name: segment, entryKind: 'FOLDER', parentFolderId: parentId, reuseExisting: true } }); id = result.data.id; folders.set(path, id); }
+                    parentId = id;
+                }
+                const form = new FormData(); form.set('file', file, name); form.set('name', name); form.set('entryKind', 'FILE'); if (parentId) form.set('parentFolderId', parentId);
+                await api(endpoint, { method: 'POST', body: form }); uploaded++;
+            }
+            toast.success(`${uploaded} file${uploaded === 1 ? '' : 's'} uploaded.`);
+        } catch (error) { fail(error); }
+        finally { setPending(false); setPendingLabel(null); router.refresh(); if (fileRef.current) fileRef.current.value = ''; if (folderRef.current) folderRef.current.value = ''; }
+    };
     function beginRename(document: DocumentItem) {
         setSelectedIds([document.id]);
         setSelectionAnchorId(document.id);
@@ -126,14 +161,24 @@ export function WorkspaceDetail({ workspaceId, readOnly, currentFolderId, folder
         setEntryName(document.name);
         setCreatingFolder(false);
     }
-    const renameEntry: (document: DocumentItem) => Promise<void> = async () => { toast.info('This action is unavailable.'); };
+    const renameEntry = async (document: DocumentItem): Promise<void> => {
+        if (pending || readOnly || !entryName.trim()) return;
+        setPending(true);
+        try { await api(`${endpoint}/${document.id}`, { method: 'PATCH', body: { name: entryName.trim() } }); setRenamingId(null); router.refresh(); }
+        catch (error) { fail(error); }
+        finally { setPending(false); }
+    };
     function requestDelete(targets: DocumentItem[]) {
         if (targets.length === 0 || readOnly || pending)
             return;
         setDeleteTargets(targets);
     }
     async function deleteEntries() {
-        toast.info('This action is unavailable.');
+        if (pending || readOnly || !deleteTargets?.length) return;
+        setPending(true);
+        try { await api(endpoint, { method: 'DELETE', body: { documentIds: deleteTargets.map(document => document.id) } }); setDeleteTargets(null); clearSelection(); router.refresh(); }
+        catch (error) { fail(error); }
+        finally { setPending(false); }
     }
     function downloadEntries(targets: DocumentItem[]) {
         const files = targets.filter((document) => document.entryKind === 'FILE' && document.downloadHref);
@@ -149,7 +194,13 @@ export function WorkspaceDetail({ workspaceId, readOnly, currentFolderId, folder
         if (files.length > 1)
             toast.success(`${files.length} downloads started.`);
     }
-    const launchTool: (tool: WorkspaceTool) => Promise<void> = async () => { toast.info('This action is unavailable.'); };
+    const launchTool = async (tool: WorkspaceTool): Promise<void> => {
+        if (!toolLaunch || launchingToolId) return;
+        setLaunchingToolId(tool.id);
+        try { await openTool(toolLaunch.mode === 'PERSONAL' ? { mode: 'PERSONAL', workspaceId, toolId: tool.id, roleAssignmentId: toolLaunch.roleAssignmentId } : { mode: 'WORK', attemptId: toolLaunch.attemptId, toolId: tool.id, roleAssignmentId: toolLaunch.roleAssignmentId }); }
+        catch (error) { fail(error); }
+        finally { setLaunchingToolId(null); }
+    };
     const currentPathLabel = breadcrumbs.map((breadcrumb) => breadcrumb.name).join('/');
     return (<div className="bg-background flex h-full min-h-0 flex-col overflow-hidden">
             <section className="flex min-h-0 flex-1 flex-col">
@@ -211,6 +262,7 @@ export function WorkspaceDetail({ workspaceId, readOnly, currentFolderId, folder
                             <span className="text-muted-foreground mr-1 text-xs tabular-nums">
                                 {selectedItems.length} selected
                             </span>
+                            {selectedTextFile && <Button variant="outline" size="sm" disabled={pending} onClick={() => setEditingDocument(selectedTextFile)}>Open text</Button>}
                             {selectedFiles.length > 0 && <Button variant="outline" size="sm" disabled={pending} onClick={() => downloadEntries(selectedItems)}>
                                 <HugeiconsIcon icon={Download01Icon} strokeWidth={2}/>
                                 <span className="hidden sm:inline">Download{selectedFiles.length > 1 ? ` (${selectedFiles.length})` : ''}</span>
@@ -293,6 +345,7 @@ export function WorkspaceDetail({ workspaceId, readOnly, currentFolderId, folder
                 </footer>
             </section>
 
+            {editingDocument && <DocumentContentEditor workspaceId={workspaceId} document={editingDocument} readOnly={readOnly} onClose={() => setEditingDocument(null)} onSaved={() => router.refresh()} />}
             {deleteTargets && <AlertDialog open onOpenChange={(open) => !open && !pending && setDeleteTargets(null)}>
                 <AlertDialogContent className="rounded-xl">
                     <AlertDialogHeader>

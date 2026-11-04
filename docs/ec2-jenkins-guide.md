@@ -2,7 +2,7 @@
 
 Bạn tự viết pipeline, cấu hình cloud và chạy deployment. Repo hiện có Docker cho phát triển local; chưa có `Jenkinsfile`, image production hay stack production do tài liệu này tạo ra. Với lựa chọn **EC2 t4g.nano**, bắt đầu bằng [hướng dẫn nano ARM64 và dự toán chi phí](ec2-t4g-nano.md): máy chỉ có 0.5 GiB RAM, dùng cho demo ít tải và cần đo thực tế.
 
-Jenkins và quá trình build image chạy ở máy khác. Nano chỉ nhận image `linux/arm64` đã build, chạy reverse proxy, Laravel và PostgreSQL 17. Frontend Next có SSR cần host khác hoặc máy nhiều RAM hơn; chưa có frontend được triển khai trong phạm vi backend hiện tại.
+Frontend và backend đã được kết nối ở local; chưa có phần nào được triển khai cloud. Jenkins và quá trình build image chạy ở máy khác. Nano chỉ nhận image `linux/arm64` đã build, chạy reverse proxy, Laravel và PostgreSQL 17 cho demo ít tải. Frontend Next có SSR cần host khác hoặc máy nhiều RAM hơn; không đưa cả stack vào ngân sách 0.5 GiB RAM của nano.
 
 ## 1. Kiến trúc cần dựng
 
@@ -27,8 +27,9 @@ Cài Docker Engine cùng Compose plugin bằng [hướng dẫn Ubuntu chính th�
 
 | File/cấu hình | Nội dung cần có |
 | --- | --- |
-| `Jenkinsfile` | Checkout, kiểm tra PHP, PostgreSQL test, build image, push, deploy nhánh được tin cậy, healthcheck, báo kết quả và cleanup CI |
+| `Jenkinsfile` | Checkout, kiểm tra PHP/TypeScript, PostgreSQL test, browser E2E, build frontend và image, push, deploy nhánh được tin cậy, healthcheck, báo kết quả và cleanup CI |
 | Dockerfile production | PHP 8.3 cùng extensions, source + vendor từ lockfile; web server production; user và quyền ghi phù hợp |
+| Build/image frontend | Cài pnpm theo `client/package.json`, kiểm tra/build Next.js và đóng gói SSR; chạy trên host khác hoặc instance đủ RAM |
 | Compose CI | PostgreSQL test tạm và API test; không publish port host; project/volume riêng từng build |
 | Compose production | API/web proxy/PostgreSQL 17, image tags/digests, mạng nội bộ, persistent storage, env và restart/healthcheck |
 | Reverse proxy/TLS | Vhost platform, vhost tool riêng, HTTPS, forwarded headers, upload limits, route `/api`, `/sanctum/csrf-cookie`, `/up` |
@@ -63,12 +64,17 @@ Chuẩn bị environment production riêng ngoài Git. Các nhóm biến cần k
 | Khóa | `APP_KEY` cố định; `TOOL_TOKEN_SECRET` ngẫu nhiên riêng, giữ ổn định giữa release |
 | Database | `DB_CONNECTION=pgsql`, host là service PostgreSQL, database/user/password production riêng |
 | SPA | `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `SANCTUM_STATEFUL_DOMAINS`, cookie/session nói trên |
+| Next.js | `LERNUMI_API_URL` là địa chỉ Laravel mà tiến trình Next truy cập được; cấu hình trước build và giữ cùng giá trị khi chạy SSR. `FRONTEND_URL` là origin app public, khớp Laravel |
 | Session/storage | `SESSION_DRIVER=database`, local storage mount bền vững; `FILESYSTEM_DISK` theo cấu hình thực tế |
 | Tool | `TOOL_RUNTIME_ORIGIN` public, `TOOL_TOKEN_TTL=300`; cấu hình route runtime ở hostname riêng |
 | Email | SMTP thật cho reset password/verification; địa chỉ gửi và link quay về frontend đã cấu hình |
 | Vận hành | Log level phù hợp, log rotation, backup destination, metrics/alerts |
 
 Tạo `APP_KEY` một lần khi dựng môi trường và lưu an toàn; không `key:generate` lại sau mỗi deploy. Không đưa `.env`, private key, cookie, Bearer token hoặc mật khẩu vào artifact/log. `APP_DEBUG=false` là cấu hình production của [Laravel](https://laravel.com/docs/13.x/configuration#debug-mode).
+
+`client/next.config.ts` đọc `LERNUMI_API_URL` khi tạo rewrites cho `/api/*` và `/sanctum/*`. Các rewrite được ghi vào kết quả `next build`, vì vậy phải cấp biến này **trước `pnpm build`**; đổi biến chỉ khi khởi động container không đổi đích proxy đã build. Giữ cùng giá trị cho SSR runtime để browser proxy và server component truy cập cùng backend. Khi đổi backend URL giữa staging/production, build artifact phù hợp từng môi trường, hoặc tự thiết kế một địa chỉ backend ổn định mà các môi trường đều phân giải đúng. Không dùng địa chỉ CI tạm rồi đưa nguyên rewrite đó lên production.
+
+`FRONTEND_URL` trong Next và Laravel phải cùng origin app public, ví dụ `https://app.example.com`; đồng bộ CORS/Sanctum và cấu hình proxy ở mục 3. URL này khác địa chỉ nội bộ dùng làm `LERNUMI_API_URL`. Hostname tool tiếp tục tách riêng khỏi app và cookie đăng nhập.
 
 Trong Jenkins Credentials, tạo ID riêng cho registry, deploy SSH nếu dùng SSH, và secret file/environment. Bind credential ở đúng stage cần dùng. Chỉ job/nhánh được tin cậy được push/deploy; build PR/fork chạy test không có credential production. Masking log không ngăn một pipeline độc hại đọc secret, vì vậy cần tách trust boundary này trong cấu hình job/agent. [Jenkins Credentials](https://www.jenkins.io/doc/book/using/using-credentials/), [xử lý credential trong pipeline](https://www.jenkins.io/doc/book/pipeline/jenkinsfile/#handling-credentials).
 
@@ -79,28 +85,32 @@ Tạo Multibranch Pipeline trỏ repository, chọn branch discovery và cài we
 | Stage | Việc thực hiện | Điều kiện đạt |
 | --- | --- | --- |
 | Checkout | Checkout chính xác commit; lưu SHA và metadata release | Workspace đúng commit |
-| Dependencies | Cài Composer theo lockfile; kiểm tra PHP/extensions | Cài thành công, platform phù hợp |
-| Static checks | Lint PHP, kiểm tra dependency theo chính sách của bạn | Không lỗi syntax/platform |
-| Integration tests | PostgreSQL 17 riêng; chạy toàn bộ PHPUnit với DB `lernumi_testing` | Suite pass; lưu JUnit report |
-| Image | Build image production đúng CPU, gắn tag commit, smoke test | Image khởi động được |
+| Dependencies | Cài Composer theo lockfile; tại `client/` chạy `pnpm install --frozen-lockfile`; kiểm tra PHP/extensions và Node/pnpm | Cài thành công, platform phù hợp |
+| Static checks | Lint PHP; tại `client/` chạy `pnpm typecheck`; kiểm tra dependency theo chính sách của bạn | Không lỗi syntax/type/platform |
+| API tests | PostgreSQL 17 riêng; chạy toàn bộ PHPUnit với DB `lernumi_testing` | Suite pass; lưu JUnit report |
+| Frontend build | Cấp `LERNUMI_API_URL` trước khi chạy `pnpm build` trong `client/`; giữ artifact đúng môi trường | Next build thành công |
+| Browser E2E | Khởi động backend test local đã seed và Next trên runner cô lập, rồi chạy `pnpm test:e2e` trong `client/` | Luồng UI/API pass; lưu report phù hợp |
+| Image | Build image API đúng CPU và artifact/image SSR frontend, gắn tag commit, smoke test ở staging | Cả hai phần khởi động được với cấu hình môi trường |
 | Publish | Chỉ trusted main/tag được push registry | Lưu digest/commit để truy vết |
 | Deploy | Chỉ một deployment chạy; pull đúng digest và migrate | Release được cài, healthcheck đạt |
 | Finalize | Ghi release/digest trước và sau; thông báo kết quả | Có lịch sử để rollback |
 | Cleanup CI | Luôn thu log/report và dọn đúng stack CI của build | Không đụng volume production |
 
-Agent cần Git, Docker/Compose, PHP 8.3 hoặc image test có PHP/Composer và PostgreSQL client khi cần. Node/pnpm chỉ cần khi bạn thêm kiểm tra/build frontend hoặc tool package. Jenkins hỗ trợ agent/container và sidecar để chạy build/test; xem [Docker with Pipeline](https://www.jenkins.io/doc/book/pipeline/docker/).
+Agent cần Git, Docker/Compose, PHP 8.3 hoặc image test có PHP/Composer, PostgreSQL client khi cần, cùng Node.js/pnpm để kiểm tra và build frontend đã kết nối. Dùng phiên bản pnpm khai báo trong `client/package.json`. Browser E2E cần Playwright Chromium (`pnpm exec playwright install --with-deps chromium` trên agent Linux phù hợp) hoặc browser/channel đã cài; xem [frontend README](../client/README.md). Jenkins hỗ trợ agent/container và sidecar để chạy build/test; xem [Docker with Pipeline](https://www.jenkins.io/doc/book/pipeline/docker/).
 
 Mỗi build đặt project name riêng, ví dụ `lernumi-ci-<job>-<build-number>` đã chuẩn hóa. CI Compose không publish `8000`/`5433`, tránh tranh port và tránh trỏ tới database local/production. `tests/TestCase.php` cố tình chỉ chấp nhận PostgreSQL `lernumi_testing`; cấu hình `phpunit.xml` và CI database phải đồng bộ. Đợi `pg_isready` rồi chạy PHPUnit. Không chạy các suite `RefreshDatabase` song song trên cùng một database; muốn parallel test phải tách database và điều chỉnh guard có chủ đích.
+
+Browser E2E dùng tài khoản/demo data trong stack test riêng, không dùng production. Chạy PHPUnit xong rồi mới seed/khởi động backend phục vụ E2E; không để `RefreshDatabase` xóa dữ liệu trong lúc browser đang kiểm thử. Cấu hình hiện tại chỉ chấp nhận URL local, frontend `localhost:3001`, API `localhost:8000` và runtime tool `127.0.0.1:8000`. Bố trí các tiến trình trong cùng network namespace của môi trường test cô lập để các địa chỉ này hoạt động mà không mở port CI ra Internet. Không chạy hai job E2E dùng chung các port/database này trên cùng môi trường. Nếu bạn thay topology CI, phải cập nhật đồng bộ URL, hostnames và cấu hình Playwright rồi kiểm tra lại luồng cookie/runtime.
 
 Lưu ý `compose.yaml` local có environment/port/bind mount dành cho phát triển. Chỉ đổi `-p` trên file này chưa đủ để thành CI hoặc production. Bạn cần viết file CI riêng như bảng trên. Khi cleanup có thể xóa volume tạm của đúng build CI; không dùng `down -v` trên stack chứa dữ liệu thật.
 
 ## 6. Trình tự deploy và rollback
 
 1. Khóa deployment theo môi trường, chặn build cũ deploy sau build mới. Lưu digest đang chạy và digest sắp triển khai; tạo/kiểm tra backup theo chính sách đã chọn.
-2. Pull đúng image đã pass CI. Không build lại từ source trên EC2; cùng image đó được thử ở staging rồi đưa lên production.
+2. Pull đúng image đã pass CI. Không build lại từ source trên EC2; image API được thử ở staging rồi đưa lên production. Artifact frontend phải được build với backend URL phù hợp như mục 4 và thử lại với cấu hình đích trước khi phát hành.
 3. Inject environment, kiểm tra network và volume đã mount. Xác nhận database production đúng trước khi chạy migration.
 4. Chạy `php artisan migrate --force` một lần bằng image mới trong mạng production. Giữ khóa deploy trong suốt bước này và dừng pipeline nếu migration lỗi. Laravel cung cấp `--force` để chạy migration production không hỏi tương tác. [Tài liệu migrations](https://laravel.com/docs/13.x/migrations#forcing-migrations-to-run-in-production).
-5. Khởi động/thay API container bằng image mới, tạo cache với environment thật, restart worker nếu sau này có queue. Với một instance có thể có downtime ngắn; muốn tránh cần tự bổ sung hai release upstream và chuyển proxy sau khi kiểm tra.
+5. Khởi động/thay API container bằng image mới, tạo cache với environment thật, restart worker nếu sau này có queue. Phát hành artifact/image frontend lên host SSR riêng hoặc instance đủ RAM, cấp đúng environment runtime và cấu hình proxy cùng origin. Với một instance có thể có downtime ngắn; muốn tránh cần tự bổ sung hai release upstream và chuyển proxy sau khi kiểm tra.
 6. Kiểm tra `/up`, truy vấn database và một luồng authenticated smoke test bằng tài khoản kiểm thử phù hợp. `/up` mặc định chỉ xác nhận ứng dụng boot; một response `200` chưa chứng minh database/storage hoạt động. [Laravel health route](https://laravel.com/docs/13.x/deployment#the-health-route).
 7. Kiểm tra storage đọc/ghi, session/CSRF, download file và khởi chạy tool trên hostname riêng. Nếu đạt, lưu release thành công; nếu không, trả proxy/API về image trước và kiểm tra lại.
 

@@ -1,12 +1,12 @@
 # Lernumi API reference
 
-Tài liệu này mô tả backend hiện có để bạn tự nối frontend. Business API dùng **/api/v1**; API dành cho tool dùng **/api/tool/v1**. Bảng cuối tài liệu liệt kê toàn bộ route API đang đăng ký, controller xử lý và mục đích.
+Tài liệu này mô tả backend đang được frontend Next.js sử dụng. Business API dùng **/api/v1**; API dành cho tool dùng **/api/tool/v1**. Bảng cuối tài liệu liệt kê toàn bộ route API đang đăng ký, controller xử lý và mục đích. Xem [hướng dẫn kết nối](frontend-integration.md) để đọc các helper và luồng giao diện hiện có.
 
 Các ký hiệu như `<institution-uuid>`, `<assessment-uuid>` cần được thay bằng UUID nhận từ API. Không gửi nguyên chuỗi placeholder. Có thể thử các luồng bằng [requests.http](../server/requests.http), giữ cookie giữa các request và tự điền ID từ response. Thông tin chạy Docker và tài khoản demo chỉ nằm trong [server README](../server/README.md). Chi tiết RBAC bổ sung ở [auth-access-api.md](auth-access-api.md).
 
 ## 1. URL, đăng nhập và header
 
-Local: frontend http://localhost:3000, backend http://localhost:8000. Dùng localhost cho business API. Host 127.0.0.1:8000 được dùng làm origin riêng của tool trong cấu hình local; gọi business API trên host đó có thể nhận 404 theo ranh giới origin.
+Local: frontend http://localhost:3001, backend http://localhost:8000. Dùng localhost cho business API. Host 127.0.0.1:8000 được dùng làm origin riêng của tool trong cấu hình local; gọi business API trên host đó có thể nhận 404 theo ranh giới origin.
 
 Production nên phục vụ app và /api cùng origin qua reverse proxy, ví dụ https://app.example.com; tool dùng hostname khác, ví dụ https://tools.example.net. Giữ SESSION_DOMAIN=null để cookie đăng nhập chỉ thuộc host app. Sanctum stateful domains chỉ chứa app/frontend, không thêm hostname tool. Khác port trên cùng hostname chưa tạo được ranh giới cookie cho tool.
 
@@ -18,7 +18,7 @@ Browser dùng Sanctum cookie session:
 4. GET /api/v1/auth/session để lấy user, contexts và isAdmin. Sau reload frontend, gọi lại endpoint này.
 5. POST /api/v1/auth/logout khi đăng xuất; logout-all thu hồi mọi phiên/token/runtime của tài khoản.
 
-Ví dụ frontend bạn có thể tự viết:
+Ví dụ HTTP tương đương với helper frontend hiện có tại `client/src/lib/api/client.ts`:
 
 ~~~javascript
 await fetch('/sanctum/csrf-cookie', { credentials: 'include' });
@@ -41,7 +41,7 @@ const payload = await response.json();
 if (!response.ok) throw payload;
 ~~~
 
-Khi frontend gọi localhost:8000 trực tiếp từ localhost:3000, thay URL tương ứng, bật credentialed CORS và Sanctum stateful domains đã cấu hình. Các route auth có CSRF/session riêng; business routes nhận session qua Sanctum.
+Frontend hiện proxy `/api/*` và `/sanctum/*` tới Laravel để browser gọi cùng origin. Nếu gọi localhost:8000 trực tiếp từ localhost:3001, thay URL tương ứng, bật credentialed CORS và Sanctum stateful domains đã cấu hình. Các route auth có CSRF/session riêng; business routes nhận session qua Sanctum.
 
 Client ngoài browser có thể dùng Authorization: Bearer `<personal-access-token>` trên business routes. Token này được tạo tại POST /auth/tokens sau khi đăng nhập và xác nhận currentPassword. Đây là token tài khoản; JWT tool là loại khác và chỉ dùng cho runtime API.
 
@@ -57,7 +57,7 @@ Phần lớn resource CRUD trả JSON có data. Tuy nhiên learning và runtime 
 | Academic CRUD, role CRUD, assignment, scope/code, account, tool catalog | {data:object} hoặc {data:[],links,meta} |
 | Student offerings | {offerings:[],meta} / {offering:object} |
 | Student assessment | {assessment:object} |
-| Attempt list/create/detail | {attempts:[],meta} / {attempt:object}; detail thêm assessment,result |
+| Attempt list/create/detail | {attempts:[],meta} / {attempt:object}; detail thêm assessment,result,sessions,canReplay |
 | Groups | {groups:[]} / {group:object} |
 | Marking overview/detail | {terms:[]} / {attempt,assessment,student,marks,result,flags,sessions,replay,canViewMarks,canReplay,canMark,canFinalise} |
 | Mark/result mutation | {mark:object} / {result:object} |
@@ -103,9 +103,11 @@ Login body là {email,password,remember?}. Response session chứa user.id/name/
 | POST /auth/tokens | name,currentPassword,expiresAt?; trả token một lần; mặc định 30 ngày, tối đa 1 năm |
 | DELETE /auth/tokens/{token} | Xóa PAT của user, thu hồi runtime xuất phát từ PAT |
 
-Password reset email trỏ tới FRONTEND_URL/reset-password?token=...&email=.... Bạn cần tự tạo màn hình nhập password mới và gọi reset API. Local mail dùng transport cấu hình trong môi trường; production cần mail transport thật.
+Password reset email trỏ tới FRONTEND_URL/reset-password?token=...&email=.... Frontend hiện có màn hình `/forgot-password` và `/reset-password` gọi các API tương ứng. Local mail dùng transport cấu hình trong môi trường; production cần mail transport thật.
 
 User mới có thể GET /institution-directory?search=... để tìm institution có role cho phép request. Sau đó GET /institutions/{institution}/requestable-roles, gửi role request, chờ duyệt rồi xin offering scope hoặc redeem scope code. POST /institutions/{institution}/join tự cấp role khớp autoGrantEmailRegex và chỉ chạy khi email đã verify.
+
+Sau khi có role trong institution, GET `/institutions/{institution}/requestable-offerings` trả danh mục offering để chọn khi xin scope, kể cả khi role chưa được cấp offering scope nào. Endpoint yêu cầu `institution.view`, không cấp quyền đọc assessment hay danh sách thành viên. Nhận `page`, `perPage` (1–100, mặc định 20), `search` (tối đa 200 ký tự, tìm trong mã/tên subject). Response là `{data:[],links,meta}`; mỗi item chỉ có `id`, `institutionId`, `subjectId`, `termId`, `subject:{subjectCode,subjectName}`, `term:{year,session}`.
 
 Admin quản lý user qua /admin/users. Field writable: name,firstName,lastName,email,password,isAdmin,isActive. Vô hiệu hóa hoặc đổi password qua admin API thu hồi session, PAT và runtime. Không có endpoint xóa user để giữ lịch sử học tập. Admin cuối cùng đang active không thể bị disable/demote.
 
@@ -204,10 +206,14 @@ Luồng student:
 
 1. GET /me/offerings, chọn offering rồi GET /me/offerings/{offering}.
 2. GET /me/assessments/{assessment} lấy assessment đã publish và danh sách tools.
-3. Với bài nhóm, POST /me/assessments/{assessment}/groups bằng {"name":"Team A","memberIds":["`<user-uuid>`"]}; student tạo group luôn có chính họ. GET groups trả group của mình; manager có assessment.update xem toàn bộ.
+3. Với bài nhóm, POST /me/assessments/{assessment}/groups bằng {"name":"Team A","memberEmails":["friend@example.test"]} từ UI, hoặc dùng `memberIds` chứa các user UUID. Student tạo group luôn có chính họ. GET groups trả group của mình; manager có assessment.update xem toàn bộ.
 4. POST /me/attempts bằng {"assessmentId":"`<assessment-uuid>`"}; bài nhóm thêm "groupId":"`<group-uuid>`". Response 201 là {attempt:{id,userId,assessmentId,groupId,startAt,submitAt,workspaceId,workspace,group}}.
 5. Mở workspace, launch tool, làm bài. POST /me/attempts/{attempt}/submit với {} khi hoàn thành.
-6. GET /me/attempts?assessmentId=`<uuid>` để xem các lượt của mình; GET detail trả {attempt,assessment,result}. Bài nhóm được xem là attempt của mọi thành viên.
+6. GET /me/attempts?assessmentId=`<uuid>` để xem các lượt của mình; GET detail trả {attempt,assessment,result,sessions,canReplay}. Bài nhóm được xem là attempt của mọi thành viên.
+
+Group create/update nhận một trong hai field `memberIds` hoặc `memberEmails`, không gửi đồng thời. `memberEmails` được trim và chuyển chữ thường trước khi kiểm tra; tối đa 100 email, không trùng. Mỗi email phải thuộc tài khoản active có đủ quyền tại assessment. Email không tồn tại và email không đủ quyền đều trả cùng lỗi validation tại `memberEmails`: `Every member must have active access to this assessment.` Khi creator không phải assessment manager sửa nhóm bằng `memberEmails`, backend tự giữ creator trong nhóm; `memberEmails: []` giữ lại riêng creator. Với `memberIds`, creator phải được giữ rõ trong danh sách khi người sửa không phải manager. Bỏ cả hai field khi PATCH thì giữ nguyên thành viên.
+
+`sessions` trong own/group attempt detail chỉ chứa các work session của workspace đó khi context đang chọn có `tool_session.replay_own`. Mỗi session có `id`, `toolId`, `toolName`, `toolVersionId`, `startedAt`, `endedAt`, `eventBatchCount`. Khi thiếu quyền này, `canReplay=false` và `sessions=[]`; truyền `roleAssignmentId` nhất quán để kiểm tra đúng role đang dùng. Quyền replay không thay thế yêu cầu sở hữu attempt và quyền xem bài; giao diện dùng session `id` làm `workSessionId` khi launch mode `REPLAY`.
 
 Mỗi người chỉ thuộc một group cho mỗi assessment. Mọi thành viên phải có active assessment access. Creator hoặc assessment manager được đổi group trước khi có attempt; từ attempt đầu tiên trở đi, membership/name/delete group bị khóa 409. Bài cá nhân không nhận groupId. Có thể có nhiều attempt; submit không thể lặp lại. Submit đóng work sessions đang mở và khóa mọi ghi vào assignment workspace.
 
@@ -430,7 +436,7 @@ Runtime FormRequest validation trả error.code=VALIDATION_ERROR và error.field
 
 ## 12. Toàn bộ API routes
 
-Snapshot từ php artisan route:list --path=api --json ngày 2026-10-30. GET routes cũng hỗ trợ HEAD; bảng bỏ HEAD để dễ đọc. Tất cả path bên dưới là path đầy đủ. Prefix /admin vẫn có kiểm quyền trong controller, không chỉ dựa vào tên URL.
+Bảng đồng bộ với các file route API ngày 2026-11-03; có thể kiểm tra lại bằng `php artisan route:list --path=api --json`. GET routes cũng hỗ trợ HEAD; bảng bỏ HEAD để dễ đọc. Tất cả path bên dưới là path đầy đủ. Prefix /admin vẫn có kiểm quyền trong controller, không chỉ dựa vào tên URL.
 
 ### Account, session và system users
 
@@ -517,6 +523,7 @@ Snapshot từ php artisan route:list --path=api --json ngày 2026-10-30. GET rou
 | --- | --- | --- | --- |
 | POST | /api/v1/institutions/{institution}/join | RoleController@join | Auto-grant role bằng email đã verify |
 | GET | /api/v1/institutions/{institution}/members | AssignmentController@members | Members trong institution hoặc offering cụ thể |
+| GET | /api/v1/institutions/{institution}/requestable-offerings | RequestableOfferingController | Danh mục offering giới hạn field cho thành viên xin scope; cần institution.view |
 | GET | /api/v1/institutions/{institution}/requestable-roles | RoleController@requestable | Roles user được phép gửi request |
 | GET | /api/v1/institutions/{institution}/role-assignments | AssignmentController@index | Role assignments; offeringId giới hạn scope và response |
 | POST | /api/v1/institutions/{institution}/role-assignments | AssignmentController@store | Grant role và optional offering scopes |
@@ -554,7 +561,7 @@ Snapshot từ php artisan route:list --path=api --json ngày 2026-10-30. GET rou
 | DELETE | /api/v1/me/assessments/{assessment}/groups/{group} | GroupController@destroy | Xóa group trước attempt đầu tiên |
 | GET | /api/v1/me/attempts | AttemptController@index | Các attempt own/group cho assessmentId |
 | POST | /api/v1/me/attempts | AttemptController@store | Bắt đầu attempt và tạo assignment workspace |
-| GET | /api/v1/me/attempts/{attempt} | AttemptController@show | Own/group attempt, assessment và official result |
+| GET | /api/v1/me/attempts/{attempt} | AttemptController@show | Own/group attempt, assessment, official result và own replay sessions theo quyền |
 | POST | /api/v1/me/attempts/{attempt}/submit | AttemptController@submit | Nộp bài và đóng mọi work session |
 | GET | /api/v1/me/offerings | LearningController@index | Offerings user có quyền xem |
 | GET | /api/v1/me/offerings/{offering} | LearningController@show | Offering và published assessments |

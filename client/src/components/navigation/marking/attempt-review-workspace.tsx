@@ -9,6 +9,8 @@ import { Alert02Icon,CheckmarkCircle02Icon,Clock01Icon,NoteEditIcon,} from '@hug
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api/client';
 type MarkStatus = 'DRAFT' | 'SUBMITTED' | 'SUPERSEDED';
 export type ReviewMark = {
     id: string;
@@ -34,7 +36,11 @@ type DraftMark = ReviewMark & {
     status: 'DRAFT';
     own: true;
 };
-export function AttemptReviewWorkspace({ marks, flags, canViewMarks, canReplay, canMark, replay, }: {
+export function AttemptReviewWorkspace({ institutionId, attemptId, roleAssignmentId, marks, flags, canViewMarks, canReplay, canMark, canFinalise = false, replay, }: {
+    institutionId: string;
+    attemptId: string;
+    roleAssignmentId?: string | null;
+    canFinalise?: boolean;
     marks: ReviewMark[];
     flags: ReviewFlag[];
     canViewMarks: boolean;
@@ -43,22 +49,45 @@ export function AttemptReviewWorkspace({ marks, flags, canViewMarks, canReplay, 
     replay: {
 
         toolName: string;
+        workSessionId: string;
 
     } | null;
 }) {
-    const [draft] = useState<DraftMark | null>((marks.find((mark): mark is DraftMark => mark.status === 'DRAFT' && mark.own) ?? null));
+    const [draft, setDraft] = useState<DraftMark | null>((marks.find((mark): mark is DraftMark => mark.status === 'DRAFT' && mark.own) ?? null));
     const [score, setScore] = useState(draft?.score ?? '');
     const [outOf, setOutOf] = useState(draft?.outOf ?? '100');
     const [feedback, setFeedback] = useState(draft?.feedback ?? '');
-    const [working] = useState<'start' | 'save' | 'submit' | null>(null);
+    const [working, setWorking] = useState<'start' | 'save' | 'submit' | 'finalise' | null>(null);
+    const [resultNote, setResultNote] = useState('');
+    const router = useRouter();
+    const endpoint = `/api/v1/institutions/${institutionId}/attempts/${attemptId}`;
+    const body = (values: Record<string, unknown> = {}) => ({ ...values, ...(roleAssignmentId ? { roleAssignmentId } : {}) });
+    const errorMessage = (error: unknown) => toast.error(error instanceof Error ? error.message : 'The mark could not be saved.');
     async function startDraft(): Promise<void> {
-        toast.info('This action is unavailable.');
+        setWorking('start');
+        try { const { mark } = await api<{ mark: ReviewMark }>(`${endpoint}/marks`, { method: 'POST', body: body() }); setDraft({ ...mark, status: 'DRAFT', own: true }); setScore(mark.score ?? ''); setOutOf(mark.outOf); setFeedback(mark.feedback ?? ''); router.refresh(); }
+        catch (error) { errorMessage(error); }
+        finally { setWorking(null); }
     }
     async function save(): Promise<void> {
-        toast.info('This action is unavailable.');
+        if (!draft) return;
+        setWorking('save');
+        try { const { mark } = await api<{ mark: ReviewMark }>(`${endpoint}/marks/${draft.id}`, { method: 'PATCH', body: body({ score: score.trim() || null, outOf, feedback: feedback || null }) }); setDraft({ ...mark, status: 'DRAFT', own: true }); toast.success('Draft saved.'); router.refresh(); }
+        catch (error) { errorMessage(error); }
+        finally { setWorking(null); }
     }
     async function submit(): Promise<void> {
-        toast.info('This action is unavailable.');
+        if (!draft) return;
+        setWorking('submit');
+        try { await api(`${endpoint}/marks/${draft.id}`, { method: 'PATCH', body: body({ score: score.trim() || null, outOf, feedback: feedback || null }) }); await api(`${endpoint}/marks/${draft.id}/submit`, { method: 'POST', body: body() }); setDraft(null); toast.success('Mark submitted.'); router.refresh(); }
+        catch (error) { errorMessage(error); }
+        finally { setWorking(null); }
+    }
+    async function finalise(markId: string | null): Promise<void> {
+        setWorking('finalise');
+        try { await api(`${endpoint}/result${roleAssignmentId && !markId ? `?roleAssignmentId=${roleAssignmentId}` : ''}`, { method: markId ? 'PUT' : 'DELETE', ...(markId ? { body: body({ markId, note: resultNote || null }) } : {}) }); toast.success(markId ? 'Official result published.' : 'Official result cleared.'); router.refresh(); }
+        catch (error) { errorMessage(error); }
+        finally { setWorking(null); }
     }
     return (<div className="grid min-h-[38rem] overflow-hidden border bg-card xl:grid-cols-[minmax(0,0.9fr)_minmax(34rem,1.1fr)]">
             <section className="min-w-0 border-b xl:border-r xl:border-b-0">
@@ -76,7 +105,7 @@ export function AttemptReviewWorkspace({ marks, flags, canViewMarks, canReplay, 
                                 {replay ? `${replay.toolName} recording available` : 'No replayable session recorded'}
                             </p>
                         </div>
-                        {canReplay && replay ? (<LaunchReplayButton />) : (<Badge variant="outline">{canReplay ? 'No recording' : 'Replay permission required'}</Badge>)}
+                        {canReplay && replay ? (<LaunchReplayButton workSessionId={replay.workSessionId} roleAssignmentId={roleAssignmentId} />) : (<Badge variant="outline">{canReplay ? 'No recording' : 'Replay permission required'}</Badge>)}
                     </div>
                 </div>
 
@@ -110,7 +139,7 @@ export function AttemptReviewWorkspace({ marks, flags, canViewMarks, canReplay, 
                         <h2 className="font-heading mt-1 text-lg font-semibold">Independent marking rounds</h2>
                         <p className="text-muted-foreground mt-1 text-sm">Submitted marks stay immutable; corrections create another round.</p>
                     </div>
-                    {canMark && !draft && (<Button onClick={() => void startDraft()} disabled>
+                    {canMark && !draft && (<Button onClick={() => void startDraft()} disabled={working !== null}>
                             {working === 'start' ? <Spinner /> : <HugeiconsIcon icon={NoteEditIcon} strokeWidth={2}/>}
                             Start a marking round
                         </Button>)}
@@ -139,16 +168,17 @@ export function AttemptReviewWorkspace({ marks, flags, canViewMarks, canReplay, 
                             <Textarea className="min-h-36 resize-y rounded-md" value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="Record feedback, evidence and follow-up notes…"/>
                         </label>
                         <div className="mt-4 flex flex-wrap justify-end gap-2">
-                            <Button variant="outline" onClick={() => void save()} disabled>
+                            <Button variant="outline" onClick={() => void save()} disabled={working !== null}>
                                 {working === 'save' && <Spinner />} Save draft
                             </Button>
-                            <Button onClick={() => void submit()} disabled>
+                            <Button onClick={() => void submit()} disabled={working !== null || !score.trim()}>
                                 {working === 'submit' ? <Spinner /> : <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2}/>}
                                 Submit mark
                             </Button>
                         </div>
                     </div>)}
 
+                {canFinalise && <div className="border-b px-5 py-4"><label className="grid gap-2 text-sm">Official result note (optional)<Input value={resultNote} onChange={event => setResultNote(event.target.value)} maxLength={2000} /></label><div className="mt-3 flex flex-wrap gap-2">{marks.filter(mark => mark.status === 'SUBMITTED' && !mark.official).map(mark => <Button key={mark.id} size="sm" variant="outline" disabled={working !== null} onClick={() => void finalise(mark.id)}>Publish {mark.score}/{mark.outOf} by {mark.markerName}</Button>)}{marks.some(mark => mark.official) && <Button size="sm" variant="outline" disabled={working !== null} onClick={() => void finalise(null)}>Clear official result</Button>}</div></div>}
                 {!canViewMarks && !canMark ? (<div className="px-6 py-14 text-center">
                         <p className="font-medium">Marking history is not available to this role.</p>
                         <p className="text-muted-foreground mt-1 text-sm">You can still use the replay controls allowed by your permissions.</p>

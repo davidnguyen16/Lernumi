@@ -26,7 +26,7 @@ export type ToolListItem = {
     };
 };
 const column = columnHelperFor<ToolListItem>();
-const ENDPOINT = '';
+const ENDPOINT = '/api/v1/admin/tools';
 export function ToolsTable({ tools, page, pageCount, total, sort, dir, }: {
     tools: ToolListItem[];
     page: number;
@@ -113,7 +113,7 @@ function RowActions({ tool }: {
                         <HugeiconsIcon icon={Edit02Icon} strokeWidth={2}/> Edit details
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DeleteResourceDialog endpoint={`${ENDPOINT}/${tool.id}`} title={`Delete ${tool.name}?`} description="Deletion is unavailable." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}><HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/> Delete</DropdownMenuItem>}/>
+                    <DeleteResourceDialog endpoint={`${ENDPOINT}/${tool.id}`} title={`Delete ${tool.name}?`} description="Tools with versions or linked assessments are retained. An unused tool can be deleted." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}><HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/> Delete</DropdownMenuItem>}/>
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>);

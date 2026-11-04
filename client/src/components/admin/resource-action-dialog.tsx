@@ -1,29 +1,50 @@
 'use client';
 import { AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,AlertDialogDescription,AlertDialogFooter,AlertDialogHeader,AlertDialogTitle,AlertDialogTrigger,} from '@/components/ui/alert-dialog';
 import { Spinner } from '@/components/ui/spinner';
-import { useState,type ReactElement,type ReactNode } from 'react';
-export function ResourceActionDialog({ title, description, confirmLabel, destructive = false, trigger }: {
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { cloneElement,useState,type ComponentProps,type ReactElement,type ReactNode } from 'react';
+import { api } from '@/lib/api/client';
+import { useRouter } from 'next/navigation';
+export function ResourceActionDialog({ endpoint, method = 'POST', body, title, description, confirmLabel, destructive = false, trigger, onCompleted, refreshOnComplete = true }: {
     endpoint: string;
     method?: 'POST' | 'PATCH' | 'DELETE';
+    body?: unknown;
     title: string;
     description: ReactNode;
     confirmLabel: string;
     destructive?: boolean;
     trigger: ReactElement;
     onCompleted?: () => void;
+    refreshOnComplete?: boolean;
 }) {
     const [open, setOpen] = useState(false);
-    const working = false;
+    const [working, setWorking] = useState(false);
+    const router = useRouter();
     const [error, setError] = useState<string | null>(null);
+    // Let Menu.Item supply its menuitem role and roving tabIndex. An outer
+    // Dialog.Trigger would replace them with standalone button semantics.
+    const dialogTrigger = trigger.type === DropdownMenuItem
+        ? cloneElement(trigger as ReactElement<ComponentProps<typeof DropdownMenuItem>>, {
+            render: <AlertDialogTrigger nativeButton={false} render={<div />} />,
+        })
+        : <AlertDialogTrigger render={trigger} />;
     async function confirm() {
-        setError('This action is unavailable.');
+        setWorking(true);
+        setError(null);
+        try {
+            await api(endpoint, { method, body });
+            setOpen(false);
+            onCompleted?.();
+            if (refreshOnComplete) router.refresh();
+        } catch (error) { setError(error instanceof Error ? error.message : 'Could not complete this action.'); }
+        finally { setWorking(false); }
     }
     return (<AlertDialog open={open} onOpenChange={(next) => {
             setOpen(next);
             if (!next)
                 setError(null);
         }}>
-            <AlertDialogTrigger nativeButton={false} render={trigger}/>
+            {dialogTrigger}
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>{title}</AlertDialogTitle>
@@ -34,7 +55,7 @@ export function ResourceActionDialog({ title, description, confirmLabel, destruc
                     </div>)}
                 <AlertDialogFooter>
                     <AlertDialogCancel disabled={working}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction variant={destructive ? 'destructive' : 'default'} disabled onClick={(event) => {
+                    <AlertDialogAction variant={destructive ? 'destructive' : 'default'} disabled={working} onClick={(event) => {
             event.preventDefault();
             void confirm();
         }}>

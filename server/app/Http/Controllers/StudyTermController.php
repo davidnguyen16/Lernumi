@@ -24,7 +24,7 @@ class StudyTermController
     public function index(IndexAcademicRequest $request, Institution $institution)
     {
         $this->access->authorize($request->user(), 'term.view', $institution);
-        $query = $institution->terms()->with('periods')->getQuery();
+        $query = $institution->terms()->with('periods')->withCount('offerings')->getQuery();
         foreach (['year', 'session'] as $field) if ($request->has($field)) $query->where($field, $request->validated($field));
         return StudyTermResource::collection($this->paginateAcademic($query, $request, ['year' => 'year', 'createdAt' => 'created_at'], '-year', ['session']));
     }
@@ -38,7 +38,7 @@ class StudyTermController
     public function show(Request $request, Institution $institution, StudyTerm $term): StudyTermResource
     {
         $this->access->authorize($request->user(), 'term.view', $institution);
-        return new StudyTermResource($term->load('periods'));
+        return new StudyTermResource($term->load('periods')->loadCount('offerings'));
     }
 
     public function update(StudyTermRequest $request, Institution $institution, StudyTerm $term): StudyTermResource

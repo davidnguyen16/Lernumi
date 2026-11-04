@@ -1,4 +1,4 @@
-import { NavigationEmptyState,NavigationPage } from '@/components/navigation/page-shell';
-export default function Page() {
-    return <NavigationPage title="Institution profile" description="Public identity and institution details."><NavigationEmptyState title="No institution selected" description="Institution details will appear here when available."/></NavigationPage>;
+import { InstitutionAccessPage } from '@/components/navigation/institution-access-page';
+export default async function Page({ searchParams }: PageProps<'/navigation/institution/settings'>) {
+    return <InstitutionAccessPage kind="settings" searchParams={await searchParams} />;
 }

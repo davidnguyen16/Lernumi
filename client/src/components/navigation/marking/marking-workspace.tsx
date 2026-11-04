@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 export type MarkingAttemptSummary = {
     id: string;
+    assessmentId?: string;
     assessmentName: string;
     startedAt: string;
     submitted: boolean;
@@ -23,6 +24,7 @@ export type MarkingStudentSummary = {
 };
 export type MarkingSubjectSummary = {
     id: string;
+    offeringId?: string;
     code: string;
     name: string;
     assessmentCount: number;

@@ -9,7 +9,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
-export function WorkspaceHeader({ initialName, personal, readOnly, }: {
+import { api } from '@/lib/api/client';
+export function WorkspaceHeader({ workspaceId, initialName, personal, readOnly, }: {
+    workspaceId: string;
     initialName: string;
     personal: boolean;
     readOnly: boolean;
@@ -17,13 +19,17 @@ export function WorkspaceHeader({ initialName, personal, readOnly, }: {
     const router = useRouter();
     const [editing, setEditing] = useState(false);
     const [name, setName] = useState(initialName);
-    const [pending] = useState(false);
+    const [pending, setPending] = useState(false);
     function cancelEditing() {
         setName(initialName);
         setEditing(false);
     }
     async function renameWorkspace() {
-        toast.info('This action is unavailable.');
+        if (!name.trim() || pending || !personal) return;
+        setPending(true);
+        try { await api(`/api/v1/workspaces/${workspaceId}`, { method: 'PATCH', body: { name: name.trim() } }); setEditing(false); router.refresh(); }
+        catch (error) { toast.error(error instanceof Error ? error.message : 'Could not rename the workspace.'); }
+        finally { setPending(false); }
     }
     return (<div className="flex h-16 min-w-0 items-center gap-2">
             <Button nativeButton={false} variant="ghost" size="icon-sm" render={<Link href="/navigation/workspaces"/>} aria-label="Back to workspaces">
@@ -51,12 +57,12 @@ export function WorkspaceHeader({ initialName, personal, readOnly, }: {
                 </div>)}
 
             <div className="flex shrink-0 items-center gap-1">
-                {!readOnly &&
+                {personal && !readOnly &&
             (editing ? (<>
                             <Button variant="ghost" size="sm" disabled={pending} onClick={cancelEditing}>
                                 Cancel
                             </Button>
-                            <Button size="sm" disabled onClick={() => void renameWorkspace()}>
+                            <Button size="sm" disabled={pending || !name.trim()} onClick={() => void renameWorkspace()}>
                                 {pending && <Spinner />}
                                 Save
                             </Button>
@@ -65,7 +71,7 @@ export function WorkspaceHeader({ initialName, personal, readOnly, }: {
                             <span className="hidden xl:inline">Rename</span>
                         </Button>))}
 
-                {personal && !editing && (<ResourceActionDialog endpoint="" method="DELETE" title={`Delete ${initialName}?`} description="The workspace, every folder and every uploaded file will be permanently deleted." confirmLabel="Delete workspace" destructive onCompleted={() => router.push('/navigation/workspaces')} trigger={<Button variant="ghost" size="icon-sm" className="text-destructive" aria-label="Delete workspace">
+                {personal && !editing && (<ResourceActionDialog endpoint={`/api/v1/workspaces/${workspaceId}`} method="DELETE" title={`Delete ${initialName}?`} description="This removes the workspace and all its folders and files from your account." confirmLabel="Delete workspace" destructive refreshOnComplete={false} onCompleted={() => window.location.assign('/navigation/workspaces')} trigger={<Button variant="ghost" size="icon-sm" className="text-destructive" aria-label="Delete workspace">
                                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/>
                             </Button>}/>)}
             </div>

@@ -112,6 +112,49 @@ class LearningFeatureTest extends TestCase
         $this->assertTrue(AssessmentAttempt::query()->findOrFail($attemptId)->isOwnedBy($partner));
     }
 
+    public function test_group_members_can_be_selected_by_email_and_the_creator_is_retained(): void
+    {
+        [$user, $offering, $assessment] = $this->fixture();
+        $assessment->update(['is_group' => true]);
+        $partner = $this->user();
+        $this->grant($partner, $offering, $this->studentPermissions());
+        $base = '/api/v1/me/assessments/'.$assessment->id.'/groups';
+        $groupId = $this->actingAs($user)->postJson($base, ['name' => 'Email group', 'memberEmails' => [' '.strtoupper($partner->email).' ']])
+            ->assertCreated()->assertJsonCount(2, 'group.members')->json('group.id');
+        $this->patchJson($base.'/'.$groupId, ['memberEmails' => []])->assertOk()->assertJsonCount(1, 'group.members')->assertJsonPath('group.members.0.userId', $user->id);
+        $outsider = $this->user();
+        $missing = $this->postJson($base, ['name' => 'Missing', 'memberEmails' => ['unknown@example.test']])->assertUnprocessable()->json('errors.memberEmails');
+        $ineligible = $this->postJson($base, ['name' => 'Ineligible', 'memberEmails' => [$outsider->email]])->assertUnprocessable()->json('errors.memberEmails');
+        $this->assertSame($missing, $ineligible);
+        $this->postJson($base, ['name' => 'Ambiguous', 'memberIds' => [$partner->id], 'memberEmails' => [$partner->email]])->assertUnprocessable();
+        $this->assertDatabaseCount('assessment_groups', 1);
+    }
+
+    public function test_attempt_owners_can_discover_replay_sessions_only_with_replay_permission(): void
+    {
+        [$user, $offering, $assessment] = $this->fixture();
+        $attempt = $this->attempt($user, $assessment);
+        [$tool, $version] = $this->tool($user);
+        $session = AssignmentWorkSession::create(['assignment_workspace_id' => $attempt->workspace->workspace_id, 'tool_id' => $tool->id, 'tool_version_id' => $version->id, 'user_id' => $user->id, 'start_at' => now()]);
+        $path = '/api/v1/me/attempts/'.$attempt->id;
+        $this->actingAs($user)->getJson($path)->assertOk()->assertJsonPath('canReplay', true)->assertJsonCount(1, 'sessions')->assertJsonPath('sessions.0.id', $session->id)->assertJsonPath('sessions.0.toolName', $tool->name);
+        $readOnly = $this->grant($user, $offering, ['offering.view', 'assessment.view_published', 'attempt.view_own']);
+        $this->getJson($path.'?roleAssignmentId='.$readOnly->id)->assertOk()->assertJsonPath('canReplay', false)->assertJsonCount(0, 'sessions');
+        $this->actingAs($this->user())->getJson($path)->assertNotFound();
+    }
+
+    public function test_requestable_offerings_expose_only_labels_to_members_without_an_offering_scope(): void
+    {
+        [$user, $offering] = $this->fixture();
+        $path = '/api/v1/institutions/'.$offering->institution_id.'/requestable-offerings';
+        $this->getJson($path)->assertUnauthorized();
+        ScopeAssignment::whereHas('roleAssignment', fn ($query) => $query->where('user_id', $user->id))->delete();
+        $this->actingAs($user)->getJson('/api/v1/institutions/'.$offering->institution_id.'/offerings')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson($path)->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $offering->id)
+            ->assertJsonMissingPath('data.0.assessmentCount')->assertJsonMissingPath('data.0.subject.subjectDescription');
+        $this->actingAs($this->user())->getJson($path)->assertForbidden();
+    }
+
     public function test_group_members_need_assessment_access_and_can_only_join_one_group(): void
     {
         [$user, $offering, $assessment] = $this->fixture();

@@ -49,11 +49,13 @@ export function InstitutionsTable({ institutions, page, pageCount, total, sort, 
         column.accessor((row) => row.counts.subjects, {
             id: 'subjects',
             header: 'Subjects',
+            enableSorting: false,
             cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
         }),
         column.accessor((row) => row.counts.terms, {
             id: 'terms',
             header: 'Terms',
+            enableSorting: false,
             cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
         }),
         column.display({
@@ -63,7 +65,7 @@ export function InstitutionsTable({ institutions, page, pageCount, total, sort, 
         }),
     ] as Array<AdminColumnDef<InstitutionListItem>>, []);
     if (editing) {
-        return (<InstitutionFormPage institution={editing === 'create' ? undefined : editing} onCancel={() => setEditing(null)}/>);
+        return (<InstitutionFormPage institution={editing === 'create' ? undefined : editing} endpoint="/api/v1/admin/institutions" editEndpoint={editing === 'create' ? undefined : `/api/v1/admin/institutions/${editing.id}`} onCancel={() => setEditing(null)}/>);
     }
     return (<DataTable columns={columns} data={institutions} emptyMessage={list.input
             ? `No institutions match "${list.input}".`

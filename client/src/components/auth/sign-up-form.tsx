@@ -7,6 +7,8 @@ import { FormInput } from '@/components/form';
 import { Button } from '@/components/ui/button';
 import { FieldGroup } from '@/components/ui/field';
 import { SignUpSchema, type SignUpSchemaValue } from '@/lib/auth/validation/credentials';
+import { api, applyFormErrors } from '@/lib/api/client';
+import { FormAlert } from './form-alert';
 
 export function SignUpForm() {
     const form = useForm<SignUpSchemaValue>({
@@ -16,8 +18,14 @@ export function SignUpForm() {
     });
 
     return (
-        <form onSubmit={(event) => event.preventDefault()} noValidate>
+        <form onSubmit={form.handleSubmit(async values => {
+            try {
+                await api('/api/v1/auth/register', { method: 'POST', body: { ...values, name: `${values.firstName} ${values.lastName}`.trim(), password_confirmation: values.password } });
+                window.location.replace('/navigation/dashboard');
+            } catch (error) { applyFormErrors(error, form); }
+        })} noValidate>
             <FieldGroup>
+                <FormAlert message={form.formState.errors.root?.message} />
                 <div className="grid gap-4 sm:grid-cols-2">
                     <FormInput
                         control={form.control}
@@ -46,16 +54,16 @@ export function SignUpForm() {
                     control={form.control}
                     name="password"
                     label="Password"
-                    description="At least 12 characters."
+                    description="At least 10 characters, including letters and numbers; up to 72 bytes."
                     type="password"
                     autoComplete="new-password"
                 />
 
-                <Button type="submit" className="w-full" disabled>
-                    Create account
+                <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting ? 'Creating account…' : 'Create account'}
                 </Button>
                 <p className="text-muted-foreground text-center text-xs">
-                    Account creation is currently unavailable.
+                    After signing up, request a role to join your institution.
                 </p>
             </FieldGroup>
         </form>

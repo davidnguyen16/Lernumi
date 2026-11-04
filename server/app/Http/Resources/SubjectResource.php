@@ -15,6 +15,7 @@ class SubjectResource extends JsonResource
             'subjectCode' => $this->subject_code,
             'subjectName' => $this->subject_name,
             'subjectDescription' => $this->subject_description,
+            'offeringCount' => $this->whenCounted('offerings'),
             'createdAt' => $this->created_at->toISOString(),
             'updatedAt' => $this->updated_at->toISOString(),
         ];

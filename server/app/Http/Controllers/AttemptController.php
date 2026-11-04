@@ -64,9 +64,18 @@ class AttemptController
     public function show(Request $request, AssessmentAttempt $attempt): JsonResponse
     {
         $this->own($request, $attempt);
+        $canReplay = $this->learning->can($request->user(), 'tool_session.replay_own', $attempt->assessment->offering, $request);
+        $sessions = $canReplay && $attempt->workspace ? AssignmentWorkSession::query()
+            ->where('assignment_workspace_id', $attempt->workspace->workspace_id)->with('tool')->withCount('eventBatches')
+            ->orderByDesc('start_at')->get()->map(fn ($session) => [
+                'id' => $session->id, 'toolId' => $session->tool_id, 'toolName' => $session->tool->name,
+                'toolVersionId' => $session->tool_version_id, 'startedAt' => $session->start_at->toISOString(),
+                'endedAt' => $session->end_at?->toISOString(), 'eventBatchCount' => $session->event_batches_count,
+            ])->all() : [];
         return response()->json(['attempt' => (new AttemptResource($attempt->load('workspace.workspace', 'group.members.user')))->resolve($request),
             'assessment' => $this->learning->assessmentData($request->user(), $attempt->assessment, $request),
-            'result' => $attempt->result ? (new ResultResource($attempt->result))->resolve($request) : null]);
+            'result' => $attempt->result ? (new ResultResource($attempt->result))->resolve($request) : null,
+            'sessions' => $sessions, 'canReplay' => $canReplay]);
     }
 
     public function submit(Request $request, AssessmentAttempt $attempt): JsonResponse

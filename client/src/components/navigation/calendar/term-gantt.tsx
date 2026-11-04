@@ -8,6 +8,8 @@ import { useEffect,useMemo,useRef,useState } from 'react';
 import type { CalendarAssessment,CalendarOffering,CalendarTerm } from './types';
 import { reportError } from './week-events';
 import { addDays,dayKeyOf,diffDays,formatDay,weekIndexOf,type DayKey,type TermWeek } from './weeks';
+import { api } from '@/lib/api/client';
+import { useRouter } from 'next/navigation';
 const LANE_HEIGHT = 30;
 const ROW_PADDING = 8;
 const LABEL_COL = '9rem';
@@ -59,6 +61,7 @@ export function TermGantt({ term, weeks, offerings, assessments, plans, today, t
     focusMonday: DayKey;
     onFocusWeek: (week: TermWeek) => void;
 }) {
+    const router = useRouter();
     const [editing, setEditing] = useState<{
         bar: Bar;
         anchor: DOMRect;
@@ -108,8 +111,8 @@ export function TermGantt({ term, weeks, offerings, assessments, plans, today, t
         ? ((diffDays(spanStart, today) + 0.5) / totalDays) * 100
         : null;
     const columns = `${LABEL_COL} repeat(${Math.max(weeks.length, 1)}, minmax(3.25rem, 1fr))`;
-    const savePlan: (assessmentId: string, startDate: DayKey, endDate: DayKey) => Promise<void> = async () => { throw new Error('This action is unavailable.'); };
-    const removePlan: (assessmentId: string) => Promise<void> = async () => { throw new Error('This action is unavailable.'); };
+    const savePlan = async (assessmentId: string, startDate: DayKey, endDate: DayKey): Promise<void> => { await api(`/api/v1/me/assessment-plans/${assessmentId}`, { method: 'PUT', body: { startDate, endDate } }); router.refresh(); };
+    const removePlan = async (assessmentId: string): Promise<void> => { await api(`/api/v1/me/assessment-plans/${assessmentId}`, { method: 'DELETE' }); router.refresh(); };
     return (<section className="bg-card overflow-hidden rounded-xl border">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                 <div>
@@ -333,7 +336,7 @@ function PlanEditor({ bar, anchor, termStart, termEnd, onSave, onRemove, onClose
                         <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>
                             Cancel
                         </Button>
-                        <Button type="submit" size="sm" disabled>
+                        <Button type="submit" size="sm" disabled={busy || !valid}>
                             {busy ? 'Saving…' : bar.plan ? 'Save' : 'Plan'}
                         </Button>
                     </div>

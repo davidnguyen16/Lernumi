@@ -28,6 +28,8 @@ export type RequestListItem = {
     };
     processedBy: string | null;
     approvedAssignmentId: string | null;
+    canApprove: boolean;
+    canReject: boolean;
 };
 const column = columnHelperFor<RequestListItem>();
 const STATUS_BADGE = {
@@ -138,7 +140,7 @@ function RequestActions({ request, actionBasePath, contextQuery, }: {
     actionBasePath: string;
     contextQuery: string;
 }) {
-    if (request.status !== 'PENDING')
+    if (request.status !== 'PENDING' || (!request.canApprove && !request.canReject))
         return null;
     const name = `${request.user.firstName} ${request.user.lastName}`;
     return (<div className="flex justify-end">
@@ -147,21 +149,21 @@ function RequestActions({ request, actionBasePath, contextQuery, }: {
                             <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2}/>
                         </Button>}/>
                 <DropdownMenuContent align="end">
-                    <ResourceActionDialog endpoint={actionEndpoint(actionBasePath, request.id, 'approve', contextQuery)} title={`Approve ${request.role.roleName}?`} description={request.role.scopeType === 'INSTITUTION'
+                    {request.canApprove && <ResourceActionDialog endpoint={actionEndpoint(actionBasePath, request.id, 'approve', contextQuery)} method="PATCH" body={{ decision: 'APPROVED' }} title={`Approve ${request.role.roleName}?`} description={request.role.scopeType === 'INSTITUTION'
             ? `This grants ${request.role.roleName} to ${name} institution-wide.`
             : `This grants ${request.role.roleName} to ${name} without access to any offering yet. An offering scope can be assigned later.`} confirmLabel="Approve request" trigger={<DropdownMenuItem closeOnClick={false}>
                                 <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2}/>
                                 Approve
-                            </DropdownMenuItem>}/>
-                    <DropdownMenuSeparator />
-                    <ResourceActionDialog endpoint={actionEndpoint(actionBasePath, request.id, 'reject', contextQuery)} title={`Reject ${request.role.roleName}?`} description={`This closes ${name}’s request without granting a role. The request remains in history.`} confirmLabel="Reject request" destructive trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
+                            </DropdownMenuItem>}/>}
+                    {request.canApprove && request.canReject && <DropdownMenuSeparator />}
+                    {request.canReject && <ResourceActionDialog endpoint={actionEndpoint(actionBasePath, request.id, 'reject', contextQuery)} method="PATCH" body={{ decision: 'REJECTED' }} title={`Reject ${request.role.roleName}?`} description={`This closes ${name}’s request without granting a role. The request remains in history.`} confirmLabel="Reject request" destructive trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
                                 <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2}/>
                                 Reject
-                            </DropdownMenuItem>}/>
+                            </DropdownMenuItem>}/>}
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>);
 }
 function actionEndpoint(basePath: string, requestId: string, action: 'approve' | 'reject', query: string): string {
-    return `${basePath}/${requestId}/${action}${query ? `?${query}` : ''}`;
+    return `${basePath}/${requestId}${query ? `?${query}` : ''}`;
 }

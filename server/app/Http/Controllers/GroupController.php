@@ -33,7 +33,7 @@ class GroupController
             $group = DB::transaction(function () use ($request, $assessment): AssessmentGroup {
                 $locked = Assessment::query()->lockForUpdate()->findOrFail($assessment->id);
                 $this->access($request, $locked);
-                $ids = $request->validated('memberIds', []);
+                $ids = $this->memberIds($request, $locked);
                 if (! $this->manager($request, $locked) || $ids === []) $ids[] = $request->user()->id;
                 $ids = array_values(array_unique($ids));
                 $this->validateMembers($ids, $locked);
@@ -63,8 +63,11 @@ class GroupController
                 $lockedAssessment = Assessment::query()->lockForUpdate()->findOrFail($assessment->id);
                 $lockedGroup = AssessmentGroup::query()->lockForUpdate()->findOrFail($group->id);
                 $this->editable($request, $lockedAssessment, $lockedGroup);
-                if ($request->has('memberIds')) {
-                    $ids = $request->validated('memberIds');
+                if ($request->has('memberIds') || $request->has('memberEmails')) {
+                    $ids = $this->memberIds($request, $lockedAssessment);
+                    if ($request->has('memberEmails') && ! $this->manager($request, $lockedAssessment)) {
+                        $ids = array_values(array_unique([...$ids, $lockedGroup->created_by_id]));
+                    }
                     if (! $this->manager($request, $lockedAssessment) && ! in_array($lockedGroup->created_by_id, $ids, true)) {
                         throw ValidationException::withMessages(['memberIds' => 'The group creator must remain a member.']);
                     }
@@ -133,4 +136,19 @@ class GroupController
         }
     }
 
+    private function memberIds(GroupRequest $request, Assessment $assessment): array
+    {
+        if (! $request->has('memberEmails')) return $request->validated('memberIds', []);
+        $emails = $request->validated('memberEmails');
+        $users = User::query()->whereIn('email', $emails)->where('is_active', true)->get();
+        if ($users->count() !== count($emails)) {
+            throw ValidationException::withMessages(['memberEmails' => 'Every member must have active access to this assessment.']);
+        }
+        $ids = $users->pluck('id')->all();
+        try { $this->validateMembers($ids, $assessment); }
+        catch (ValidationException) {
+            throw ValidationException::withMessages(['memberEmails' => 'Every member must have active access to this assessment.']);
+        }
+        return $ids;
+    }
 }

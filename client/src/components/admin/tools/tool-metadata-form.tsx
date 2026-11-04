@@ -20,7 +20,7 @@ export function ToolMetadataForm({ tool, backHref }: {
                 description: tool.description ?? '',
                 codeBaseLocation: tool.codeBaseLocation ?? '',
             },
-        }} createEndpoint="" title={{ create: 'Tool details', edit: 'Edit tool details' }} description={{
+        }} createEndpoint="/api/v1/admin/tools" editEndpoint={tool ? `/api/v1/admin/tools/${tool.id}` : undefined} transformValues={({ code, ...values }) => tool ? values : { code, ...values }} title={{ create: 'Tool details', edit: 'Edit tool details' }} description={{
             create: 'Tool identity and public metadata.',
             edit: 'Metadata changes do not modify any deployed package.',
         }} onCancel={back} onSaved={back}>

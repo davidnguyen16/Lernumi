@@ -5,14 +5,17 @@ import { ThemeMenu } from '@/components/theme-menu';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset,SidebarProvider,SidebarTrigger } from '@/components/ui/sidebar';
 import { Suspense } from 'react';
-export default function NavigationLayout({ children, pageHeader }: LayoutProps<'/navigation'>) {
+import { requireSession } from '@/lib/api/server';
+import { contextOptions } from '@/lib/api/context';
+export default async function NavigationLayout({ children, pageHeader }: LayoutProps<'/navigation'>) {
+    const session = await requireSession();
     return (<SidebarProvider>
-            <Suspense><AppSidebar /></Suspense>
+            <Suspense><AppSidebar session={session} /></Suspense>
             <SidebarInset>
                 <header className="bg-background sticky top-0 z-10 flex h-16 shrink-0 items-center gap-3 border-b px-5 md:px-6">
                     <SidebarTrigger className="-ml-1.5"/>
                     <div className="min-w-0 flex-1">{pageHeader}</div>
-                    <HeaderContext options={[]}/>
+                    <HeaderContext options={contextOptions(session)}/>
                     <Separator orientation="vertical" className="h-5 data-vertical:self-center"/>
                     <ThemeMenu />
                     <HeaderAccount />

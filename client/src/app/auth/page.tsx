@@ -4,6 +4,8 @@ import { SignInForm } from '@/components/auth/sign-in-form';
 import { SignUpForm } from '@/components/auth/sign-up-form';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getSession } from '@/lib/api/server';
+import { redirect } from 'next/navigation';
 const HIGHLIGHTS = [
     {
         icon: TimeQuarterPassIcon,
@@ -21,7 +23,8 @@ const HIGHLIGHTS = [
         description: 'Due dates, class schedules, and anything you add yourself.',
     },
 ] as const;
-export default function AuthPage() {
+export default async function AuthPage() {
+    if (await getSession()) redirect('/navigation/dashboard');
     return (<div className="bg-muted/40 relative flex min-h-svh items-center justify-center overflow-hidden p-4 md:p-8">
 
             <div aria-hidden className="text-foreground pointer-events-none absolute inset-0 opacity-[0.07]" style={{

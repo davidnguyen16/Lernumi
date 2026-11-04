@@ -44,6 +44,7 @@ Route::middleware(['auth:sanctum', EnsureActiveUser::class])->group(function ():
     Route::apiResource('admin/users', AdminUserController::class)->except('destroy')->parameters(['users' => 'user'])->whereUuid('user');
     Route::post('scope-codes/redeem', [ScopeCodeController::class, 'redeem'])->middleware('throttle:10,1');
     Route::prefix('institutions/{institution}')->whereUuid('institution')->group(function (): void {
+        Route::get('requestable-offerings', \App\Http\Controllers\RequestableOfferingController::class);
         Route::get('requestable-roles', [RoleController::class, 'requestable']);
         Route::post('join', [RoleController::class, 'join'])->middleware('throttle:10,1');
         Route::apiResource('roles', RoleController::class)->whereUuid('role');

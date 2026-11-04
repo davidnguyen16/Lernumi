@@ -7,6 +7,8 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api/client';
 export type WorkspaceSummary = {
     id: string;
     name: string;
@@ -24,9 +26,16 @@ export function WorkspaceList({ workspaces }: {
 }) {
     const [creating, setCreating] = useState(false);
     const [name, setName] = useState('');
-    const [pending] = useState(false);
+    const [pending, setPending] = useState(false);
+    const router = useRouter();
     async function createWorkspace() {
-        toast.info('This action is unavailable.');
+        if (!name.trim() || pending) return;
+        setPending(true);
+        try {
+            const result = await api<{ data: { id: string } }>('/api/v1/workspaces', { method: 'POST', body: { name: name.trim() } });
+            router.push(`/navigation/workspaces/${result.data.id}`);
+        } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not create the workspace.'); }
+        finally { setPending(false); }
     }
     if (creating) {
         return (<section className="border-border/80 bg-card rounded-xl border p-6 sm:p-8">
@@ -44,7 +53,7 @@ export function WorkspaceList({ workspaces }: {
                 </div>
                 <div className="mt-7 flex justify-end gap-2 border-t pt-5">
                     <Button variant="outline" onClick={() => setCreating(false)}>Cancel</Button>
-                    <Button disabled onClick={() => void createWorkspace()}>{pending && <Spinner />}Create workspace</Button>
+                    <Button disabled={pending || !name.trim()} onClick={() => void createWorkspace()}>{pending && <Spinner />}Create workspace</Button>
                 </div>
             </section>);
     }

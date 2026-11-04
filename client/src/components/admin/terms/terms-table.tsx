@@ -61,6 +61,7 @@ export function TermsTable({ terms, institutions, institutionId, locked, page, p
                 column.accessor((row) => row.institution.name, {
                     id: 'institution',
                     header: 'Institution',
+                    enableSorting: false,
                     cell: (info) => (<span className="text-muted-foreground text-sm">
                                       {info.getValue()}
                                   </span>),
@@ -76,11 +77,13 @@ export function TermsTable({ terms, institutions, institutionId, locked, page, p
         column.accessor((row) => row.counts.periods, {
             id: 'periods',
             header: 'Periods',
+            enableSorting: false,
             cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
         }),
         column.accessor((row) => row.counts.offerings, {
             id: 'offerings',
             header: 'Offerings',
+            enableSorting: false,
             cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
         }),
         column.display({
@@ -189,7 +192,7 @@ function RowActions({ term, endpoint, detailBasePath, contextQuery, capabilities
 
                     {capabilities.delete && <DropdownMenuSeparator />}
 
-                    {capabilities.delete && <DeleteResourceDialog endpoint={endpointFor(`${endpoint}/${term.id}`, contextQuery)} title={`Delete ${term.year} session ${term.session}?`} description="Deletion is unavailable." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
+                    {capabilities.delete && <DeleteResourceDialog endpoint={endpointFor(`${endpoint}/${term.id}`, contextQuery)} title={`Delete ${term.year} session ${term.session}?`} description="This permanently removes the study term and its periods. Terms with offerings must be retained." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
                                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/>
                                 Delete
                             </DropdownMenuItem>}/>}

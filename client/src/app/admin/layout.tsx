@@ -3,11 +3,15 @@ import { NotificationsProvider,NotificationsTrigger } from '@/components/admin/n
 import { HeaderAccount } from '@/components/navigation/header-account';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset,SidebarProvider,SidebarTrigger } from '@/components/ui/sidebar';
-export default function AdminLayout({ children }: LayoutProps<'/admin'>) {
+import { requireSession } from '@/lib/api/server';
+import { redirect } from 'next/navigation';
+export default async function AdminLayout({ children }: LayoutProps<'/admin'>) {
+    const session = await requireSession();
+    if (!session.isAdmin) redirect('/navigation/dashboard');
     return (<SidebarProvider>
             <AdminSidebar />
             <SidebarInset className="overflow-hidden">
-                <NotificationsProvider notifications={[]}>
+                <NotificationsProvider>
                     <header className="bg-background sticky top-0 z-10 flex h-16 shrink-0 items-center gap-3 border-b px-5 md:px-6">
                         <SidebarTrigger className="-ml-1.5"/>
                         <Separator orientation="vertical" className="h-5 data-vertical:self-center"/>

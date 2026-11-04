@@ -37,6 +37,7 @@ export type ScopeCodeListItem = {
     createdBy: Person;
     usedBy: Person | null;
     usedByRole: string | null;
+    canRevoke: boolean;
 };
 const column = columnHelperFor<ScopeCodeListItem>();
 function offeringLabel(offering: OfferingOption): string {
@@ -53,6 +54,7 @@ export function ScopeCodesTable({ codes, offerings, endpoint, contextQuery, capa
     capabilities: ScopeCodeCapabilities;
 }) {
     const [creating, setCreating] = useState(false);
+    const [generatedCode, setGeneratedCode] = useState<string | null>(null);
     const columns = useMemo(() => [
         column.accessor((row) => offeringLabel(row.offering), {
             id: 'offering',
@@ -65,14 +67,11 @@ export function ScopeCodesTable({ codes, offerings, endpoint, contextQuery, capa
                         </span>),
         }),
         column.accessor('id', {
-            header: 'One-time code',
+            header: 'Code reference',
             cell: (info) => (<div className="flex items-center gap-2">
                             <code className="bg-muted max-w-52 truncate rounded px-1.5 py-1 font-mono text-xs">
                                 {info.getValue()}
                             </code>
-                            <Button variant="ghost" size="icon-sm" aria-label="Copy access code" disabled={Boolean(info.row.original.used || info.row.original.revoked)} onClick={() => void copyCode(info.getValue())}>
-                                <HugeiconsIcon icon={Copy01Icon} strokeWidth={2}/>
-                            </Button>
                         </div>),
         }),
         column.accessor((row) => personLabel(row.createdBy), {
@@ -106,18 +105,18 @@ export function ScopeCodesTable({ codes, offerings, endpoint, contextQuery, capa
         column.display({
             id: 'actions',
             header: '',
-            cell: (info) => capabilities.revoke &&
+            cell: (info) => info.row.original.canRevoke &&
                 !info.row.original.used &&
                 !info.row.original.revoked ? (<ResourceActionDialog endpoint={endpointFor(`${endpoint}/${info.row.original.id}`, contextQuery)} method="DELETE" title="Revoke this access code?" description={`The unused code for ${offeringLabel(info.row.original.offering)} will stop working immediately.`} confirmLabel="Revoke code" destructive trigger={<Button variant="ghost" size="icon-sm" className="text-destructive" aria-label="Revoke access code">
                                         <HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/>
                                     </Button>}/>) : null,
         }),
-    ] as Array<AdminColumnDef<ScopeCodeListItem>>, [capabilities.revoke, contextQuery, endpoint]);
+    ] as Array<AdminColumnDef<ScopeCodeListItem>>, [contextQuery, endpoint]);
     if (creating) {
         return (<ResourceFormPage<ScopeCodeFormValue, ScopeCodeSchemaValue> schema={ScopeCodeSchema} emptyValues={EMPTY_SCOPE_CODE_FORM} createEndpoint={endpointFor(endpoint, contextQuery)} title={{ create: 'New one-time access code', edit: 'Access code' }} description={{
                 create: 'Generate a code that grants one offering scope to an existing offering role.',
                 edit: 'Access codes are immutable.',
-            }} submitLabel={{ create: 'Generate code', edit: 'Save' }} onCancel={() => setCreating(false)}>
+            }} submitLabel={{ create: 'Generate code', edit: 'Save' }} onCancel={() => setCreating(false)} onSaved={result => { if (result && typeof result === 'object' && 'data' in result) { const data = result.data; if (data && typeof data === 'object' && 'code' in data && typeof data.code === 'string') setGeneratedCode(data.code); } setCreating(false); }}>
                 {(form) => (<ResourceFormSection title="Target offering" description="The code can be redeemed once. It cannot grant a role identity by itself.">
                         <div className="max-w-2xl">
                             <FormSelect control={form.control} name="offeringId" label="Offering" items={Object.fromEntries(offerings.map((offering) => [
@@ -132,12 +131,12 @@ export function ScopeCodesTable({ codes, offerings, endpoint, contextQuery, capa
                     </ResourceFormSection>)}
             </ResourceFormPage>);
     }
-    return (<DataTable columns={columns} data={codes} filterColumnId="offering" filterPlaceholder="Search offerings…" emptyMessage={capabilities.view
+    return (<div className="space-y-4">{generatedCode && <section className="border-primary/40 rounded-lg border p-4" role="status"><p className="font-medium">Save this one-time code now</p><p className="text-muted-foreground mt-1 text-sm">It is shown only once. The reference in the table cannot be redeemed.</p><code className="mt-3 block break-all rounded bg-muted p-3 text-sm">{generatedCode}</code><div className="mt-3 flex gap-2"><Button size="sm" onClick={() => void copyCode(generatedCode)}>Copy code</Button><Button size="sm" variant="ghost" onClick={() => setGeneratedCode(null)}>Dismiss</Button></div></section>}<DataTable columns={columns} data={codes} filterColumnId="offering" filterPlaceholder="Search offerings…" emptyMessage={capabilities.view
             ? 'No access codes have been generated yet.'
             : 'You may generate access codes, but cannot inspect existing codes.'} toolbar={capabilities.create ? (<Button onClick={() => setCreating(true)} disabled={offerings.length === 0}>
                         <HugeiconsIcon icon={Add01Icon} strokeWidth={2}/>
                         New access code
-                    </Button>) : null}/>);
+                    </Button>) : null}/></div>);
 }
 async function copyCode(code: string): Promise<void> {
     try {

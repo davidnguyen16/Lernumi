@@ -5,6 +5,8 @@ import { DropdownMenu,DropdownMenuContent,DropdownMenuGroup,DropdownMenuItem,Dro
 import { ArrowDown01Icon,Logout01Icon,Settings01Icon,UserIcon,} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import Link from 'next/link';
+import { api } from '@/lib/api/client';
+import { useState } from 'react';
 export type AccountUser = {
     firstName: string;
     lastName: string;
@@ -16,6 +18,17 @@ type Props = {
     onSignOut?: () => void;
 };
 export function AccountBox({ user, onSignOut }: Props) {
+    const [signingOut, setSigningOut] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    async function signOut() {
+        if (onSignOut) return onSignOut();
+        setSigningOut(true);
+        try {
+            await api('/api/v1/auth/logout', { method: 'POST' });
+            window.location.replace('/auth');
+        } catch (error) { setError(error instanceof Error ? error.message : 'Could not sign out.'); }
+        finally { setSigningOut(false); }
+    }
     const initials = user ? `${user.firstName.at(0) ?? ''}${user.lastName.at(0) ?? ''}`.toUpperCase() : '';
     const fullName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Account';
     return (<DropdownMenu>
@@ -59,9 +72,10 @@ export function AccountBox({ user, onSignOut }: Props) {
 
                 <DropdownMenuSeparator />
 
-                <DropdownMenuItem variant="destructive" disabled={!onSignOut} onClick={onSignOut}>
+                {error && <p role="alert" className="px-2 py-1 text-xs text-destructive">{error}</p>}
+                <DropdownMenuItem variant="destructive" disabled={signingOut} onClick={() => void signOut()}>
                     <HugeiconsIcon icon={Logout01Icon} strokeWidth={2}/>
-                    Sign out
+                    {signingOut ? 'Signing out…' : 'Sign out'}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>);

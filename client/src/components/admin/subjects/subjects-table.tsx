@@ -80,6 +80,7 @@ export function SubjectsTable({ subjects, institutions, institutionId, locked, p
                 column.accessor((row) => row.institution.name, {
                     id: 'institution',
                     header: 'Institution',
+                    enableSorting: false,
                     cell: (info) => (<span className="text-muted-foreground text-sm">
                                       {info.getValue()}
                                   </span>),
@@ -88,6 +89,7 @@ export function SubjectsTable({ subjects, institutions, institutionId, locked, p
         column.accessor((row) => row.counts.offerings, {
             id: 'offerings',
             header: 'Offerings',
+            enableSorting: false,
             cell: (info) => {
                 const href = subjectBasePath
                     ? contextualHref(`${subjectBasePath}/${info.row.original.id}`, contextQuery)
@@ -209,7 +211,7 @@ function RowActions({ subject, canUpdate, canDelete, endpoint, onEdit }: {
 
                     {canUpdate && canDelete && <DropdownMenuSeparator />}
 
-                    {canDelete && (<DeleteResourceDialog endpoint={endpoint} title={`Delete ${subject.subjectCode}?`} description="Deletion is unavailable." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
+                    {canDelete && (<DeleteResourceDialog endpoint={endpoint} title={`Delete ${subject.subjectCode}?`} description="This permanently removes the subject. Subjects with existing offerings must be retained." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
                                     <HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/>
                                     Delete
                                 </DropdownMenuItem>}/>)}

@@ -3,21 +3,24 @@ import { FormAlert } from '@/components/auth/form-alert';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { api, applyFormErrors } from '@/lib/api/client';
+import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { ReactNode } from 'react';
 import { useForm,type FieldValues,type UseFormReturn } from 'react-hook-form';
 import type { z } from 'zod';
-export function ResourceFormPage<TInput extends FieldValues, TOutput extends FieldValues>({ schema, emptyValues, editing, title, description, submitLabel, onCancel, children, }: {
+export function ResourceFormPage<TInput extends FieldValues, TOutput extends FieldValues>({ schema, emptyValues, editing, title, description, submitLabel, onCancel, onSaved, createEndpoint, editEndpoint, transformValues, children, }: {
     schema: z.ZodType<TOutput, TInput>;
     emptyValues: TInput;
     editing?: {
         id: string;
         values: TInput;
     };
-    createEndpoint: string;
-    editEndpoint?: string;
+    createEndpoint: string | ((values: TOutput) => string);
+    editEndpoint?: string | ((values: TOutput) => string);
+    transformValues?: (values: TOutput) => unknown;
     title: {
         create: string;
         edit: string;
@@ -31,15 +34,27 @@ export function ResourceFormPage<TInput extends FieldValues, TOutput extends Fie
         edit: string;
     };
     onCancel: () => void;
-    onSaved?: () => void;
+    onSaved?: (data?: unknown) => void;
     children: (form: UseFormReturn<TInput, unknown, TOutput>) => ReactNode;
 }) {
     const isEdit = editing !== undefined;
+    const router = useRouter();
     const form = useForm<TInput, unknown, TOutput>({
         resolver: zodResolver(schema as never),
         defaultValues: (editing?.values ?? emptyValues) as never,
     });
-    function onSubmit() { form.setError('root', { message: 'Saving is unavailable.' }); }
+    async function onSubmit(values: TOutput) {
+        form.clearErrors();
+        try {
+            const target = isEdit ? editEndpoint : createEndpoint;
+            if (!target) throw new Error('No API endpoint is available for this record.');
+            const endpoint = typeof target === 'function' ? target(values) : target;
+            const data = await api(endpoint, { method: isEdit ? 'PATCH' : 'POST', body: transformValues ? transformValues(values) : values });
+            if (onSaved) onSaved(data);
+            else onCancel();
+            router.refresh();
+        } catch (error) { applyFormErrors(error, form); }
+    }
     return (<section className="bg-background -mx-5 min-h-[calc(100dvh-4rem)] px-5 pb-10 md:-mx-6 md:px-6">
             <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="mx-auto flex w-full max-w-7xl flex-col">
                 <header className="border-border flex flex-wrap items-start gap-4 border-b py-6">
@@ -68,7 +83,7 @@ export function ResourceFormPage<TInput extends FieldValues, TOutput extends Fie
                     <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}>
                         Cancel
                     </Button>
-                    <Button type="submit" disabled>
+                    <Button type="submit" disabled={form.formState.isSubmitting}>
                         {form.formState.isSubmitting && <Spinner />}
                         {isEdit
             ? (submitLabel?.edit ?? 'Save changes')

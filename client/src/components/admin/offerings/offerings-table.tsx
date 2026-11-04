@@ -63,6 +63,7 @@ export function OfferingsTable({ offerings, institutionId, subjects, terms, subj
         column.accessor((row) => row.subject.subjectCode, {
             id: 'subject',
             header: 'Subject',
+            enableSorting: false,
             cell: (info) => {
                 const body = <>
                             <span className="font-mono text-sm font-medium">{info.getValue()}</span>
@@ -81,6 +82,7 @@ export function OfferingsTable({ offerings, institutionId, subjects, terms, subj
         column.accessor((row) => row.term.year, {
             id: 'term',
             header: 'Term',
+            enableSorting: false,
             cell: (info) => (<span className="tabular-nums">
                             {info.getValue()} · Session {info.row.original.term.session}
                         </span>),
@@ -88,11 +90,6 @@ export function OfferingsTable({ offerings, institutionId, subjects, terms, subj
         column.accessor((row) => row.counts.assessments, {
             id: 'assessments',
             header: 'Assessments',
-            cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
-        }),
-        column.accessor((row) => row.counts.assignments, {
-            id: 'assignments',
-            header: 'Active people',
             enableSorting: false,
             cell: (info) => <span className="tabular-nums">{info.getValue()}</span>,
         }),
@@ -200,7 +197,7 @@ function OfferingActions({ offering, institutionId, endpoint, assessmentBasePath
                             Edit locked by history
                         </DropdownMenuItem>))}
                     {capabilities.delete && <DropdownMenuSeparator />}
-                    {capabilities.delete && <DeleteResourceDialog endpoint={endpointFor(`${endpoint}/${offering.id}`, contextQuery)} title={`Delete ${offering.subject.subjectCode} offering?`} description="Deletion is unavailable." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
+                    {capabilities.delete && <DeleteResourceDialog endpoint={endpointFor(`${endpoint}/${offering.id}`, contextQuery)} title={`Delete ${offering.subject.subjectCode} offering?`} description="This permanently removes the offering. Linked assessments or membership history must be retained." trigger={<DropdownMenuItem variant="destructive" closeOnClick={false}>
                                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2}/>
                                 Delete
                             </DropdownMenuItem>}/>}

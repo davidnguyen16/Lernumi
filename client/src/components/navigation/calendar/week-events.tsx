@@ -285,7 +285,7 @@ export function EventEditor({ state, anchor, timeZone, offerings, saving, onSave
                         <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={saving}>
                             Cancel
                         </Button>
-                        <Button type="submit" size="sm" disabled>
+                        <Button type="submit" size="sm" disabled={saving || !valid}>
                             {saving ? 'Saving…' : state.mode === 'create' ? 'Add' : 'Save'}
                         </Button>
                     </div>

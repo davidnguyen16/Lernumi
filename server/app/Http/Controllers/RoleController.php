@@ -19,7 +19,7 @@ class RoleController
     public function index(IndexAccessRequest $request, Institution $institution)
     {
         $this->access->authorize($request->user(), 'role.view', $institution);
-        return RoleResource::collection(Role::query()->where('institution_id', $institution->id)->when($request->input('search'), fn ($q, $search) => $q->whereRaw('strpos(lower(role_code), lower(?)) > 0 OR strpos(lower(role_name), lower(?)) > 0', [$search, $search]))->orderBy('role_code')->paginate($request->integer('perPage', 20))->withQueryString());
+        return RoleResource::collection(Role::withCount(['assignments' => fn ($q) => $q->whereNull('revoked_at'), 'requests'])->where('institution_id', $institution->id)->when($request->input('search'), fn ($q, $search) => $q->whereRaw('strpos(lower(role_code), lower(?)) > 0 OR strpos(lower(role_name), lower(?)) > 0', [$search, $search]))->orderBy('role_code')->paginate($request->integer('perPage', 20))->withQueryString());
     }
 
     public function store(RoleRequest $request, Institution $institution)
@@ -31,7 +31,7 @@ class RoleController
     {
         abort_unless($role->institution_id === $institution->id, 404);
         $this->access->authorize($request->user(), 'role.view', $institution);
-        return new RoleResource($role);
+        return new RoleResource($role->loadCount(['assignments' => fn ($q) => $q->whereNull('revoked_at'), 'requests']));
     }
 
     public function update(RoleRequest $request, Institution $institution, Role $role)

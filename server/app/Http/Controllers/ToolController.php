@@ -22,6 +22,7 @@ class ToolController
         if ($request->is('api/v1/admin/*')) $this->admin($request);
         $request->validate(['search' => ['sometimes', 'nullable', 'string', 'max:200'], 'per_page' => ['sometimes', 'integer', 'between:1,100'], 'page' => ['sometimes', 'integer', 'min:1']]);
         $tools = Tool::query()->with('activeVersion');
+        if ($this->access->isAdmin($request->user())) $tools->withCount(['versions', 'assessments', 'workSessions']);
         if (! $this->access->isAdmin($request->user())) $tools->whereNotNull('active_version_id');
         if ($request->filled('search')) $tools->whereRaw('strpos(lower(name), lower(?)) > 0', [$request->query('search')]);
 
@@ -49,6 +50,7 @@ class ToolController
         if ($request->is('api/v1/admin/*')) $this->admin($request);
         abort_unless($this->access->isAdmin($request->user()) || $tool->active_version_id !== null, 404);
 
+        if ($this->access->isAdmin($request->user())) $tool->loadCount(['versions', 'assessments', 'workSessions']);
         return new ToolResource($tool->load($this->access->isAdmin($request->user()) ? ['activeVersion', 'versions'] : ['activeVersion']));
     }
 

@@ -20,7 +20,7 @@ class InstitutionController
 
     public function index(IndexAcademicRequest $request)
     {
-        $query = Institution::query();
+        $query = Institution::query()->withCount(['subjects', 'terms', 'roles', 'roleRequests', 'scopeRequests']);
         if ($request->routeIs('admin.*')) abort_unless($this->access->isAdmin($request->user()), 403);
         elseif (! $this->access->isAdmin($request->user())) $query->whereIn('id', $this->access->institutionIds($request->user(), 'institution.settings.view'));
         $this->searchAcademic($query, $request, ['name']);
@@ -49,7 +49,7 @@ class InstitutionController
     public function show(Request $request, Institution $institution): InstitutionResource
     {
         $this->access->authorize($request->user(), 'institution.settings.view', $institution);
-        return new InstitutionResource($institution);
+        return new InstitutionResource($institution->loadCount(['subjects', 'terms', 'roles', 'roleRequests', 'scopeRequests']));
     }
 
     public function update(UpdateInstitutionRequest $request, Institution $institution): InstitutionResource

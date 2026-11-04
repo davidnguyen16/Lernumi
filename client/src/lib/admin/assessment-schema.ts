@@ -2,7 +2,7 @@ import { z } from 'zod';
 export type AssessmentSchemaValue = z.output<typeof AssessmentSchema>;
 const optionalText = z
     .string()
-    .max(4000, { message: 'Description must not exceed 4000 characters' })
+    .max(100000, { message: 'Description must not exceed 100000 characters' })
     .nullable()
     .transform((value) => {
     const trimmed = value?.trim() ?? '';
@@ -31,7 +31,7 @@ export const AssessmentSchema = z
     description: optionalText,
     weight: z.coerce
         .number({ message: 'Weight is required' })
-        .positive({ message: 'Weight must be greater than 0' })
+        .nonnegative({ message: 'Weight must not be negative' })
         .max(100, { message: 'Weight must not exceed 100' }),
     hurdle: z.boolean(),
     isGroup: z.boolean(),
@@ -41,10 +41,10 @@ export const AssessmentSchema = z
     toolIds: z.array(z.uuid({ message: 'Invalid tool selection' })).max(100),
 })
     .superRefine((value, context) => {
-    if (value.publishAt && value.dueAt && value.publishAt >= value.dueAt) {
+    if (value.publishAt && value.dueAt && value.publishAt > value.dueAt) {
         context.addIssue({
             code: 'custom',
-            message: 'Publish date must be before the due date',
+            message: 'Publish date must be at or before the due date',
             path: ['publishAt'],
         });
     }
