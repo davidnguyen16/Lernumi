@@ -146,7 +146,7 @@ records what each member built. It is based on the repository's commit history.
 
 ---
 
-## David Nguyen (Duy): Diagram tool, authentication, calendar & site pages
+## David Nguyen: Diagram tool, authentication, calendar & site pages
 
 ### EasyDraw diagram tool
 
