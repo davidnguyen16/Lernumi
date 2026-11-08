@@ -1,6 +1,14 @@
-.env
-.env.*
+.env*
+*.env
+*.env.*
 vendor/
 node_modules/
+docker/jenkins/
+storage/app/
+storage/framework/
 storage/logs/
+bootstrap/cache/
+public/storage
 .phpunit.cache/
+tests/
+scripts/

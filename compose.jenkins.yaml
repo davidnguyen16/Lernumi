@@ -26,7 +26,7 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - jenkins_home:/var/jenkins_home
-      - ./docker/jenkins/controller:/var/jenkins_home/init.groovy.d:ro
+      - ./server/docker/jenkins/controller:/var/jenkins_home/init.groovy.d:ro
       - agent_secret:/run/jenkins-agent
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/login > /dev/null"]
@@ -59,7 +59,7 @@ services:
 
   agent:
     build:
-      context: ./docker/jenkins/agent
+      context: ./server/docker/jenkins/agent
     init: true
     restart: unless-stopped
     depends_on:

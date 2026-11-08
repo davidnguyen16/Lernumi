@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 /**
  * Exercise the running local HTTP server, including browser cookies and CSRF.
- * Run: docker compose exec -T api php scripts/smoke-local.php
+ * From the repository root: docker compose -f server/compose.yaml exec -T api php scripts/smoke-local.php
  * Optional: SMOKE_BASE_URL=http://localhost:8000; DEMO_PASSWORD matches the seeded accounts.
  * No PHPUnit database, curl extension, browser, or host-side language runtime is required.
  */

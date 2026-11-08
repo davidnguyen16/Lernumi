@@ -1,6 +1,6 @@
 # Kết nối frontend với Lernumi API
 
-Frontend Next.js trong `client/` đã nối với backend Laravel ở `/api/v1`. Tài liệu này mô tả cách chạy và tổ chức phần kết nối để bạn đọc code hoặc mở rộng. Danh sách endpoint đầy đủ nằm trong [API reference](api-reference.md); có thể kiểm tra trực tiếp bằng `docker compose exec -T api php artisan route:list --path=api`. Jenkins CI/CD và triển khai EC2 do bạn thực hiện theo [hướng dẫn triển khai](ec2-jenkins-guide.md).
+Frontend Next.js trong `client/` đã nối với backend Laravel ở `/api/v1`. Tài liệu này mô tả cách chạy và tổ chức phần kết nối để bạn đọc code hoặc mở rộng. Danh sách endpoint đầy đủ nằm trong [API reference](api-reference.md); có thể kiểm tra trực tiếp bằng `docker compose -f server/compose.yaml exec -T api php artisan route:list --path=api`. Jenkins CI/CD và triển khai EC2 do bạn thực hiện theo [hướng dẫn triển khai](ec2-jenkins-guide.md).
 
 ## 1. Chạy local và chọn cùng hostname
 
@@ -12,7 +12,7 @@ Frontend Next.js trong `client/` đã nối với backend Laravel ở `/api/v1`.
 
 `client/next.config.ts` đã có rewrite cho `/api/*` và `/sanctum/*` tới `LERNUMI_API_URL` (mặc định `http://localhost:8000`). Browser gọi cùng origin frontend; đường dẫn CSRF nằm ngoài `/api/v1`. `FRONTEND_URL` trong môi trường frontend mặc định là `http://localhost:3001`, dùng làm Origin khi server component gọi Laravel.
 
-Từ thư mục gốc, chạy `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -Client` để khởi động backend, PostgreSQL và frontend. Cần Docker Desktop, Node.js và pnpm. Nếu backend đang chạy, có thể chạy `pnpm install --frozen-lockfile` rồi `pnpm dev` trong `client/`. Chỉ sao chép `client/.env.example` sang `.env.local` khi chưa có file cấu hình riêng.
+Từ thư mục gốc, chạy `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -Client` để khởi động backend, PostgreSQL và frontend. Cần Docker Desktop, Node.js và pnpm; cấu hình `server/.env` riêng trước khi chạy. Nếu backend đang chạy, có thể chạy `pnpm install --frozen-lockfile` rồi `pnpm dev` trong `client/`. Frontend dùng các địa chỉ local mặc định khi không có file môi trường. Cấu hình tùy chỉnh được giữ riêng trong `client/.env.local`; các file môi trường và template không được lưu trong Git.
 
 Tài khoản local là `admin@lernumi.test`, `teacher@lernumi.test`, `student@lernumi.test`, cùng mật khẩu `LernumiDemo123!`. Runtime tool dùng `http://127.0.0.1:8000`; giữ frontend ở `localhost` để tách cookie giữa hai hostname.
 

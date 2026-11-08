@@ -655,4 +655,4 @@ Bảng đồng bộ với các file route API ngày 2026-11-03; có thể kiểm
 | GET | /tool-runtime/bootstrap | ToolAssetController@bootstrap | Trusted launcher; chỉ trên hostname tool |
 | GET | /tools/{toolCode}/{version}/{assetPath?} | ToolAssetController@show | Protected immutable package assets; version-bound runtime cookie/bearer |
 
-Khi route thay đổi, kiểm tra lại bằng docker compose exec -T api php artisan route:list --path=api --json. Bảng trên là snapshot của code trong repository; permission catalog đầy đủ lấy bằng GET /api/v1/permissions.
+Khi route thay đổi, kiểm tra lại bằng docker compose -f server/compose.yaml exec -T api php artisan route:list --path=api --json. Bảng trên là snapshot của code trong repository; permission catalog đầy đủ lấy bằng GET /api/v1/permissions.

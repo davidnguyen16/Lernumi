@@ -1,2 +1,2 @@
 # Jenkins startup scripts execute inside Linux containers, including on Windows hosts.
-docker/jenkins/** text eol=lf
+server/docker/jenkins/** text eol=lf

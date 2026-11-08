@@ -7,7 +7,9 @@ type Fixture = { runId: string; assessmentId: string; assessmentName: string; in
 const repositoryRoot = resolve(__dirname, '../../..');
 
 function fixtureCommand<T>(action: 'create' | 'cleanup', runId: string): T {
-    const output = execFileSync('docker', ['compose', 'exec', '-T', 'api', 'php', 'scripts/e2e-fixture.php', action, runId], {
+    // Jenkins selects its isolated test stack through COMPOSE_FILE.
+    const composeFileArguments = process.env.COMPOSE_FILE ? [] : ['-f', resolve(repositoryRoot, 'server/compose.yaml')];
+    const output = execFileSync('docker', ['compose', ...composeFileArguments, 'exec', '-T', 'api', 'php', 'scripts/e2e-fixture.php', action, runId], {
         cwd: repositoryRoot, encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'],
     });
     return JSON.parse(output.trim()) as T;

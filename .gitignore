@@ -1,0 +1,4 @@
+# Environment configuration, templates, and backups stay local.
+.env*
+*.env
+*.env.*

@@ -1,29 +1,35 @@
 # Lernumi
 
-A learning management application with a Next.js frontend and a Laravel REST API backed by PostgreSQL.
+Lernumi helps students and educators organise the work around learning: subjects, assessments, deadlines, workspaces, submissions, and feedback. It keeps each activity connected to the right course, assignment, and people.
 
-- [`client/`](client/README.md): the Next.js frontend, connected to the API through a same-origin proxy and authenticated server-side reads.
-- [`server/`](server/README.md): the backend for accounts, permissions, academic management, assessment attempts and marking, workspaces, calendars, and the tool runtime.
-- [`compose.yaml`](compose.yaml): the local Docker environment for the API and PostgreSQL 17.
+When assignments, files, tools, and deadlines are scattered across different places, students can lose track of what needs attention. Educators also need to connect a submitted result with the work that led to it. Lernumi brings that context together so that planning, completing, submitting, and reviewing work form one connected workflow.
 
-Start with the [backend setup guide](server/README.md), then read the [frontend guide](client/README.md), [API reference](docs/api-reference.md), [integration guide](docs/frontend-integration.md), and [current ERD](docs/data-model.md).
+**For students**
 
-On Windows, open Docker Desktop, install Node.js and pnpm, and run the following command from this directory. It starts the API and PostgreSQL, then runs the frontend in the foreground:
+- Find published assessments and understand their deadlines.
+- Plan study activities alongside course dates and personal events.
+- Keep notes, files, and folders in personal or assessment workspaces.
+- Complete individual or group assessments, submit work, and view feedback and results.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -Client
-```
+**For educators**
 
-Open **http://localhost:3001/auth**. The API is at `http://localhost:8000`; database health is available at `/api/v1/health`. Use `localhost` for the frontend; `127.0.0.1:8000` is reserved for the isolated tool runtime.
+- Organise subjects and teaching periods, then publish assessments for the appropriate students.
+- Choose the learning tools available for an assessment.
+- Review submissions and, where supported by the learning tool, recorded work sessions.
+- Provide marks and feedback, then finalise official results.
 
-Demo accounts are `admin@lernumi.test`, `teacher@lernumi.test`, and `student@lernumi.test`, all with the local password `LernumiDemo123!`. They are seeded only in local/testing environments.
+**For institutions**
 
-Add `-Smoke -Test` to run real HTTP smoke checks and the full API test suite against a separate test database. Omit `-Client` to start only the backend. Ctrl+C stops the foreground frontend; `docker compose down` stops the backend and preserves the database volume.
+- Keep subjects and teaching activities organised by institution and term.
+- Manage membership requests, course access codes, and access approvals.
+- Assign responsibilities within the relevant institution or course, so people can access the work they are responsible for.
 
-Run the setup script before using plain `docker compose up` on a fresh clone. Composer dependencies live in the Docker `api_vendor` volume; the script installs them from `server/composer.lock`. Source files remain bind-mounted for local editing. After the lockfile changes, rerun the script or use the [Docker Composer commands](server/README.md) to update that volume. An existing host `server/vendor/` directory is preserved, but the API uses the volume's dependencies. `docker compose down` retains both the database and dependency volumes.
+**From an assessment to feedback**
 
-You will write the Jenkins CI/CD pipeline and deploy to EC2 yourself using [this guide](docs/ec2-jenkins-guide.md).
+1. An educator publishes an assessment with its requirements, dates, and available tools.
+2. A student plans the work and organises the relevant files in a workspace.
+3. The student works individually or with an assessment group and submits an attempt.
+4. The educator reviews the submission, provides feedback, and finalises the result.
+5. The student can return to the submitted work and its feedback in the same learning context.
 
-For a local Jenkins controller and build agent that both run in Docker, follow the [Jenkins Docker setup](docker/jenkins/README.md). This environment includes the build tools; you write the `Jenkinsfile` yourself.
-
-The selected cloud instance is **t4g.nano ARM64**. See the [dedicated guide](docs/ec2-t4g-nano.md) for memory limits, costs, and deployment steps.
+Connected learning tools can preserve activity from a work session for authorised review and replay. This lets educators consider how work developed alongside the final submission, while keeping that history attached to the relevant assessment and workspace.

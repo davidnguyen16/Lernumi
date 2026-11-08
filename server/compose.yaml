@@ -12,7 +12,7 @@ services:
       - "127.0.0.1:${LERNUMI_DB_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./server/docker/postgres/init-testing.sql:/docker-entrypoint-initdb.d/10-testing.sql:ro
+      - ./docker/postgres/init-testing.sql:/docker-entrypoint-initdb.d/10-testing.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lernumi -d lernumi"]
       interval: 3s
@@ -21,7 +21,7 @@ services:
 
   api:
     build:
-      context: ./server
+      context: .
     working_dir: /var/www/html
     restart: unless-stopped
     environment:
@@ -37,7 +37,7 @@ services:
     ports:
       - "127.0.0.1:${LERNUMI_API_PORT:-8000}:8000"
     volumes:
-      - ./server:/var/www/html
+      - .:/var/www/html
       - api_vendor:/var/www/html/vendor
     depends_on:
       postgres:

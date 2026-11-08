@@ -40,11 +40,11 @@ docker compose -f compose.jenkins.yaml exec agent docker buildx version
 
 The agent log should contain `Connected`. Inside the agent, the controller is `http://jenkins:8080`; `localhost` refers to the agent itself.
 
-## Write the pipeline yourself
+## Existing CI and the CD you write
 
-No `Jenkinsfile` or CI/deployment job is created by this stack. Start your own Declarative Pipeline with `agent { label 'docker-local' }`. Since this agent runs Linux, use `sh` steps. First check tool versions, then add checkout, dependencies, tests, and build stages following the [CI/CD guide](../../docs/ec2-jenkins-guide.md).
+The repository already includes `Jenkinsfile` and `compose.ci.yaml` for backend tests, frontend type checks/build, and browser E2E on `agent { label 'docker-local' }`. This Docker stack provides the controller and agent; create/configure the job in Jenkins to load the pipeline from SCM. The project owner writes CD, following the [CI/CD guide](../../../docs/ec2-jenkins-guide.md): transfer trusted release source through SSH, then build API and Nginx sequentially on EC2 ARM64, migrate, and check health. The frontend deploys separately to Vercel; a container registry is optional.
 
-Create a separate Compose stack for CI application services. The root `compose.yaml` is for local development and publishes fixed API/database ports. Existing browser tests also assume specific localhost URLs; their CI networking must be configured together before running them. Containers started by the CI engine belong to its own network, so its published ports are not Docker Desktop host ports.
+`compose.ci.yaml` provides a separate stack for CI application services. `server/compose.yaml` is for local development and publishes fixed API/database ports. The repository-wide `Jenkinsfile` and `compose.ci.yaml` live at the repository root, alongside `compose.jenkins.yaml` for starting Jenkins. Jenkins setup files live in `server/docker/jenkins/`; backend runtime configuration lives in `server/`. Existing browser tests use specific localhost URLs, supported by the CI network configuration. Containers started by the CI engine belong to its own network, so its published ports are not Docker Desktop host ports.
 
 This localhost Jenkins installation cannot receive GitHub public webhooks directly. Start with **Build Now**; configure polling or a reachable endpoint later.
 
